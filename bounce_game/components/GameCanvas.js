@@ -54,8 +54,10 @@ const LEVELS = [
 
 function loadImage(src) {
   const img = new Image();
-  img.src = src;
-  img.onerror = () => console.error(`Failed to load image: ${src}`);
+  // Add absolute path to ensure images load correctly
+  img.src = `/bounce_game/public${src}`;
+  img.onerror = (e) => console.error(`Failed to load image: ${src}`, e);
+  console.log(`Attempting to load image: /bounce_game/public${src}`);
   return img;
 }
 
@@ -91,31 +93,57 @@ export default function GameCanvas() {
 
     const levelCfg = LEVELS[levelIdx];
 
+    // Try multiple paths for basketball.png to ensure it loads
+    const basketballPaths = [
+      '/basketball.png',                  // Root path
+      'basketball.png',                   // Relative path
+      '/bounce_game/public/basketball.png', // Full path
+      '../public/basketball.png',         // Relative to component
+      './public/basketball.png',          // Another relative path
+    ];
+    
+    // Create a special basketball image with multiple fallback paths
+    const basketballImg = new Image();
+    let currentPathIndex = 0;
+    
+    const tryNextBasketballPath = () => {
+      if (currentPathIndex < basketballPaths.length) {
+        basketballImg.src = basketballPaths[currentPathIndex];
+        console.log(`Trying to load basketball from: ${basketballImg.src}`);
+        currentPathIndex++;
+      } else {
+        console.error('Failed to load basketball image after trying all paths');
+      }
+    };
+    
+    basketballImg.onload = () => {
+      console.log('Basketball image loaded successfully:', basketballImg.src);
+    };
+    
+    basketballImg.onerror = () => {
+      console.error(`Failed to load basketball from: ${basketballImg.src}`);
+      tryNextBasketballPath();
+    };
+    
+    // Start loading process
+    tryNextBasketballPath();
+    
     const assets = {
       // Use basketball.png instead of emoji - ensure it loads properly
-      playerImg: loadImage('basketball.png'), // Removed leading slash
+      playerImg: basketballImg,
       // Use Enemy_1.png instead of emoji
-      enemyImg: loadImage('Enemy_1.png'), // Removed leading slash
-      spike: loadImage('spike.png'), // Removed leading slash
-      spike2: loadImage('spike_2.png'), // Removed leading slash
-      trampoline: loadImage('trampoline.png'), // Removed leading slash
-      bgCourt: loadImage('background_court.png'), // Removed leading slash
-      bgOcean: loadImage('background_ocean.jpg'), // Removed leading slash
-      stall: loadImage('stall.png'), // Removed leading slash
+      enemyImg: loadImage('/Enemy_1.png'),
+      spike: loadImage('/spike.png'),
+      spike2: loadImage('/spike_2.png'),
+      trampoline: loadImage('/trampoline.png'),
+      bgCourt: loadImage('/background_court.png'),
+      bgOcean: loadImage('/background_ocean.jpg'),
+      stall: loadImage('/stall.png'),
       endMarker: loadImage(levelCfg.endMarker || levelCfg.endDecor),
       loopBg: loadImage(levelCfg.loopBg),
       startDecor: loadImage(levelCfg.startDecor),
       endDecor: loadImage(levelCfg.endDecor),
       groundImg: loadImage(levelCfg.ground),
-    };
-    
-    // Add onload handler specifically for player image
-    assets.playerImg.onload = () => {
-      console.log('Player image loaded successfully:', assets.playerImg.src);
-    };
-    
-    assets.playerImg.onerror = (err) => {
-      console.error('Error loading player image:', err);
     };
 
     const images = [
@@ -181,14 +209,38 @@ export default function GameCanvas() {
         ctx.strokeRect(drawX, drawY, this.w, this.h);
 
         // Special handling for player to ensure visibility
-        if (this === player && assets.playerImg && assets.playerImg.complete) {
-          // Draw player with a bright outline to ensure visibility
-          ctx.drawImage(assets.playerImg, drawX, drawY, this.w, this.h);
-          ctx.strokeStyle = 'rgba(255,255,0,0.7)';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(drawX, drawY, this.w, this.h);
-          ctx.lineWidth = 1;
-        } 
+        if (this.isPlayer) {
+          if (assets.playerImg && assets.playerImg.complete && assets.playerImg.naturalWidth > 0) {
+            // Draw player with basketball.png image
+            ctx.drawImage(assets.playerImg, drawX, drawY, this.w, this.h);
+            ctx.strokeStyle = 'rgba(255,255,0,0.7)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(drawX, drawY, this.w, this.h);
+            ctx.lineWidth = 1;
+          } else {
+            // Fallback to an orange basketball if image fails to load
+            ctx.fillStyle = '#FF6600'; // Basketball orange
+            ctx.beginPath();
+            ctx.arc(drawX + this.w/2, drawY + this.h/2, this.w/2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Add basketball lines
+            ctx.beginPath();
+            ctx.arc(drawX + this.w/2, drawY + this.h/2, this.w/2 * 0.8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(drawX + this.w/2, drawY);
+            ctx.lineTo(drawX + this.w/2, drawY + this.h);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(drawX, drawY + this.h/2);
+            ctx.lineTo(drawX + this.w, drawY + this.h/2);
+            ctx.stroke();
+            ctx.lineWidth = 1;
+          }
+        }
         // Handle other entities with images
         else if (this.img && this.img.naturalWidth) {
           // Don't use ground_city.png for the floor
@@ -312,10 +364,18 @@ export default function GameCanvas() {
 
     // Player (basketball.png) - make sure it's visible and properly sized
     const playerSize = 60;
+    // Create a fallback player representation (orange circle) in case image fails to load
     const player = new Entity(75, groundY - playerSize, playerSize, playerSize, assets.playerImg);
-    
-    // Debug log to verify player image is loaded
-    console.log('Player image loaded:', assets.playerImg.complete, 'Width:', assets.playerImg.width, 'Height:', assets.playerImg.height);
+    player.isPlayer = true; // Flag to identify this entity as the player
+    player.draw(cameraX);
+      
+    // Draw player position debug info
+    ctx.fillStyle = 'white';
+    ctx.font = '12px Arial';
+    ctx.fillText(`Player: ${Math.round(player.x)},${Math.round(player.y)}`, 10, 60);
+    ctx.fillText(`Player img loaded: ${assets.playerImg.complete}`, 10, 75);
+    ctx.fillText(`Player img path: ${assets.playerImg.src}`, 10, 90);
+    ctx.fillText(`Player img width: ${assets.playerImg.naturalWidth || 0}`, 10, 105);
     let cameraX = 0;
     let invulFrames = 60; // initial 1-sec invulnerability
 
