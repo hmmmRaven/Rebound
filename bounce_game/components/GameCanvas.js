@@ -55,6 +55,7 @@ const LEVELS = [
 function loadImage(src) {
   const img = new Image();
   img.src = src;
+  img.onerror = () => console.error(`Failed to load image: ${src}`);
   return img;
 }
 
@@ -91,21 +92,30 @@ export default function GameCanvas() {
     const levelCfg = LEVELS[levelIdx];
 
     const assets = {
-      // Use basketball.png instead of emoji
-      playerImg: loadImage('/basketball.png'),
+      // Use basketball.png instead of emoji - ensure it loads properly
+      playerImg: loadImage('basketball.png'), // Removed leading slash
       // Use Enemy_1.png instead of emoji
-      enemyImg: loadImage('/Enemy_1.png'),
-      spike: loadImage('/spike.png'),
-      spike2: loadImage('/spike_2.png'),
-      trampoline: loadImage('/trampoline.png'),
-      bgCourt: loadImage('/background_court.png'),
-      bgOcean: loadImage('/background_ocean.jpg'),
-      stall: loadImage('/stall.png'),
+      enemyImg: loadImage('Enemy_1.png'), // Removed leading slash
+      spike: loadImage('spike.png'), // Removed leading slash
+      spike2: loadImage('spike_2.png'), // Removed leading slash
+      trampoline: loadImage('trampoline.png'), // Removed leading slash
+      bgCourt: loadImage('background_court.png'), // Removed leading slash
+      bgOcean: loadImage('background_ocean.jpg'), // Removed leading slash
+      stall: loadImage('stall.png'), // Removed leading slash
       endMarker: loadImage(levelCfg.endMarker || levelCfg.endDecor),
       loopBg: loadImage(levelCfg.loopBg),
       startDecor: loadImage(levelCfg.startDecor),
       endDecor: loadImage(levelCfg.endDecor),
       groundImg: loadImage(levelCfg.ground),
+    };
+    
+    // Add onload handler specifically for player image
+    assets.playerImg.onload = () => {
+      console.log('Player image loaded successfully:', assets.playerImg.src);
+    };
+    
+    assets.playerImg.onerror = (err) => {
+      console.error('Error loading player image:', err);
     };
 
     const images = [
@@ -166,7 +176,21 @@ export default function GameCanvas() {
         const drawY = this.y;
         if (drawX + this.w < 0 || drawX > CANVAS_WIDTH) return; // off screen
 
-        if (this.img && this.img.naturalWidth) {
+        // Draw debug outline for all entities to help with visibility
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.strokeRect(drawX, drawY, this.w, this.h);
+
+        // Special handling for player to ensure visibility
+        if (this === player && assets.playerImg && assets.playerImg.complete) {
+          // Draw player with a bright outline to ensure visibility
+          ctx.drawImage(assets.playerImg, drawX, drawY, this.w, this.h);
+          ctx.strokeStyle = 'rgba(255,255,0,0.7)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(drawX, drawY, this.w, this.h);
+          ctx.lineWidth = 1;
+        } 
+        // Handle other entities with images
+        else if (this.img && this.img.naturalWidth) {
           // Don't use ground_city.png for the floor
           if (this === ground) {
             // Just draw a simple ground rectangle
@@ -179,10 +203,6 @@ export default function GameCanvas() {
           // fallback rectangle for ground and entities without images
           ctx.fillStyle = '#444';
           ctx.fillRect(drawX, drawY, this.w, this.h);
-          
-          // Debug outline to see entity boundaries
-          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-          ctx.strokeRect(drawX, drawY, this.w, this.h);
         }
       }
       intersects(other) {
@@ -290,9 +310,12 @@ export default function GameCanvas() {
       new Entity(2700, groundY - 40, 60, 40, assets.spike2),
     ];
 
-    // Player (basketball.png)
+    // Player (basketball.png) - make sure it's visible and properly sized
     const playerSize = 60;
     const player = new Entity(75, groundY - playerSize, playerSize, playerSize, assets.playerImg);
+    
+    // Debug log to verify player image is loaded
+    console.log('Player image loaded:', assets.playerImg.complete, 'Width:', assets.playerImg.width, 'Height:', assets.playerImg.height);
     let cameraX = 0;
     let invulFrames = 60; // initial 1-sec invulnerability
 
