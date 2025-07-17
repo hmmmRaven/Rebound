@@ -367,15 +367,6 @@ export default function GameCanvas() {
     // Create a fallback player representation (orange circle) in case image fails to load
     const player = new Entity(75, groundY - playerSize, playerSize, playerSize, assets.playerImg);
     player.isPlayer = true; // Flag to identify this entity as the player
-    player.draw(cameraX);
-      
-    // Draw player position debug info
-    ctx.fillStyle = 'white';
-    ctx.font = '12px Arial';
-    ctx.fillText(`Player: ${Math.round(player.x)},${Math.round(player.y)}`, 10, 60);
-    ctx.fillText(`Player img loaded: ${assets.playerImg.complete}`, 10, 75);
-    ctx.fillText(`Player img path: ${assets.playerImg.src}`, 10, 90);
-    ctx.fillText(`Player img width: ${assets.playerImg.naturalWidth || 0}`, 10, 105);
     let cameraX = 0;
     let invulFrames = 60; // initial 1-sec invulnerability
 
