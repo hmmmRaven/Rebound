@@ -91,8 +91,10 @@ export default function GameCanvas() {
     const levelCfg = LEVELS[levelIdx];
 
     const assets = {
-      ballEmoji: '🏀',
-      playerEmojis: ['🏃‍♀️', '🏃‍♂️', '🏃'],
+      // Use basketball.png instead of emoji
+      playerImg: loadImage('/basketball.png'),
+      // Use Enemy_1.png instead of emoji
+      enemyImg: loadImage('/Enemy_1.png'),
       spike: loadImage('/spike.png'),
       spike2: loadImage('/spike_2.png'),
       trampoline: loadImage('/trampoline.png'),
@@ -107,12 +109,15 @@ export default function GameCanvas() {
     };
 
     const images = [
+      assets.playerImg,
+      assets.enemyImg,
       assets.spike,
       assets.spike2,
       assets.trampoline,
       assets.loopBg,
       assets.startDecor,
       assets.endDecor,
+      assets.stall,
       assets.groundImg,
     ];
 
@@ -161,17 +166,7 @@ export default function GameCanvas() {
         const drawY = this.y;
         if (drawX + this.w < 0 || drawX > CANVAS_WIDTH) return; // off screen
 
-        if (typeof this.img === 'string') {
-          // For emoji characters (player and enemies)
-          ctx.font = `${this.h}px serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(this.img, drawX + this.w/2, drawY + this.h/2);
-          
-          // Debug outline to see entity boundaries
-          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-          ctx.strokeRect(drawX, drawY, this.w, this.h);
-        } else if (this.img && this.img.naturalWidth) {
+        if (this.img && this.img.naturalWidth) {
           // Don't use ground_city.png for the floor
           if (this === ground) {
             // Just draw a simple ground rectangle
@@ -181,9 +176,13 @@ export default function GameCanvas() {
             ctx.drawImage(this.img, drawX, drawY, this.w, this.h);
           }
         } else {
-          // fallback rectangle for ground
+          // fallback rectangle for ground and entities without images
           ctx.fillStyle = '#444';
           ctx.fillRect(drawX, drawY, this.w, this.h);
+          
+          // Debug outline to see entity boundaries
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.strokeRect(drawX, drawY, this.w, this.h);
         }
       }
       intersects(other) {
@@ -264,13 +263,12 @@ export default function GameCanvas() {
 
     const platforms = [ground, ...trampolines, ...stalls];
 
-    // enemies - place them strategically throughout the level
+    // enemies - place them strategically throughout the level using Enemy_1.png
     const enemies = Array.from({ length: 8 }).map((_, i) => {
       const x = 600 + i * 500; // More spread out
-      const emoji = assets.playerEmojis[Math.floor(Math.random() * assets.playerEmojis.length)];
       const width = 60;
       const height = 80;
-      const e = new Entity(x, groundY - height, width, height, emoji);
+      const e = new Entity(x, groundY - height, width, height, assets.enemyImg);
       e.turnCooldown = 0;
       e.jumpCooldown = 0;
       return e;
@@ -292,8 +290,9 @@ export default function GameCanvas() {
       new Entity(2700, groundY - 40, 60, 40, assets.spike2),
     ];
 
-    // Player (basketball)
-    const player = new Entity(75, groundY - 75, 60, 60, assets.ballEmoji);
+    // Player (basketball.png)
+    const playerSize = 60;
+    const player = new Entity(75, groundY - playerSize, playerSize, playerSize, assets.playerImg);
     let cameraX = 0;
     let invulFrames = 60; // initial 1-sec invulnerability
 
@@ -357,21 +356,25 @@ export default function GameCanvas() {
       
       // Draw background image
       if (assets.loopBg && assets.loopBg.complete) {
-        // Draw the scrolling background
+        // Draw the scrolling background - place at the bottom of the screen
         const bgWidth = CANVAS_WIDTH;
-        const bgHeight = CANVAS_HEIGHT;
+        const bgHeight = CANVAS_HEIGHT - GROUND_H; // Leave space for ground
         const bgX = -cameraX * 0.5 % bgWidth; // Parallax effect
         
         // Draw multiple copies to fill the screen
         ctx.drawImage(assets.loopBg, bgX, 0, bgWidth, bgHeight);
         ctx.drawImage(assets.loopBg, bgX + bgWidth, 0, bgWidth, bgHeight);
         
-        // Draw start decoration at beginning of level (flipped horizontally and at ground level)
+        // Draw ground - solid color matching the background
+        ctx.fillStyle = '#444';
+        ctx.fillRect(0, groundY, CANVAS_WIDTH, GROUND_H);
+        
+        // Draw start decoration at beginning of level (flipped horizontally and standing on ground)
         if (assets.startDecor && assets.startDecor.complete) {
           const startDecorWidth = 300;
           const startDecorHeight = 300;
           const startDecorX = 0 - cameraX;
-          const startDecorY = groundY - startDecorHeight; // Place at ground level
+          const startDecorY = groundY - startDecorHeight; // Place exactly at ground level
           
           if (startDecorX + startDecorWidth > 0 && startDecorX < CANVAS_WIDTH) {
             // Save context state
@@ -543,9 +546,9 @@ export default function GameCanvas() {
         invulFrames -= 1;
       }
       ctx.fillText(
-        `Level ${levelIdx + 1}  Lives: ${'🏀'.repeat(livesRef.current)}`,
+        `Level ${levelIdx + 1}  Lives: ${livesRef.current}`,
         10,
-        10
+        20
       );
       if (gameOverRef.current) {
         ctx.font = '80px serif';
