@@ -17,9 +17,9 @@ const S = 2; // global size scale (larger visuals)
 const GRAVITY = 0.6 * S;
 const JUMP_VELOCITY = -12 * S;
 const MOVE_SPEED = 5 * S;
-const CANVAS_WIDTH = 1920;
+const CANVAS_WIDTH = 800;
 const WORLD_WIDTH = CANVAS_WIDTH * 5; // each level spans 5 screen widths
-const CANVAS_HEIGHT = 1080;
+const CANVAS_HEIGHT = 600;
 const GROUND_H = 120;
 const INITIAL_LIVES = 3;
 
@@ -76,6 +76,12 @@ export default function GameCanvas() {
   useEffect(() => {
     gameOverRef.current = gameOver;
   }, [gameOver]);
+  
+  // Reset game over state on component mount
+  useEffect(() => {
+    setGameOver(false);
+    gameOverRef.current = false;
+  }, []);
 
   useEffect(() => {
     // reset load state whenever level changes
@@ -292,6 +298,11 @@ export default function GameCanvas() {
         invulFrames = 60;
       }
       if (gameOverRef.current) return;
+      
+      // Clear and draw background
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      ctx.fillStyle = '#87CEEB'; // Sky blue background
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
       // ----- Input -----
       player.vx = 0;
       if (keys.left) player.vx = -MOVE_SPEED;
@@ -489,7 +500,7 @@ export default function GameCanvas() {
       ref={canvasRef}
       width={CANVAS_WIDTH}
       height={CANVAS_HEIGHT}
-      style={{ border: '3px solid #fff', borderRadius: '10px', background: 'rgba(0,0,0,0.3)' }}
+      style={{ border: '3px solid #fff', borderRadius: '10px', background: '#87CEEB' }}
     />
     {overlayToShow}
     </div>
