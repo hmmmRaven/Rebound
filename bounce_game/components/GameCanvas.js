@@ -54,10 +54,20 @@ const LEVELS = [
 
 function loadImage(src) {
   const img = new Image();
-  // Add absolute path to ensure images load correctly
-  img.src = `/bounce_game/public${src}`;
-  img.onerror = (e) => console.error(`Failed to load image: ${src}`, e);
-  console.log(`Attempting to load image: /bounce_game/public${src}`);
+  // Try different paths if needed
+  const basePath = src.startsWith('/') ? src : `/${src}`;
+  img.src = basePath;
+  
+  img.onerror = (e) => {
+    console.error(`Failed to load image: ${src}`, e);
+    // Try alternative path if first one fails
+    if (img.src.startsWith('/')) {
+      img.src = src.startsWith('/') ? src.substring(1) : src;
+      console.log(`Retrying with alternate path: ${img.src}`);
+    }
+  };
+  
+  console.log(`Attempting to load image: ${img.src}`);
   return img;
 }
 
@@ -93,26 +103,21 @@ export default function GameCanvas() {
 
     const levelCfg = LEVELS[levelIdx];
 
-    // Try multiple paths for basketball.png to ensure it loads
+    // Create basketball image with multiple fallback paths
+    const basketballImg = new Image();
     const basketballPaths = [
-      '/basketball.png',                  // Root path
-      'basketball.png',                   // Relative path
-      '/bounce_game/public/basketball.png', // Full path
-      '../public/basketball.png',         // Relative to component
-      './public/basketball.png',          // Another relative path
+      '/basketball.png',
+      'basketball.png',
+      './basketball.png',
+      '../public/basketball.png',
     ];
     
-    // Create a special basketball image with multiple fallback paths
-    const basketballImg = new Image();
-    let currentPathIndex = 0;
-    
-    const tryNextBasketballPath = () => {
-      if (currentPathIndex < basketballPaths.length) {
-        basketballImg.src = basketballPaths[currentPathIndex];
-        console.log(`Trying to load basketball from: ${basketballImg.src}`);
-        currentPathIndex++;
-      } else {
-        console.error('Failed to load basketball image after trying all paths');
+    let pathIndex = 0;
+    const tryLoadBasketball = () => {
+      if (pathIndex < basketballPaths.length) {
+        basketballImg.src = basketballPaths[pathIndex];
+        console.log(`Trying basketball path: ${basketballImg.src}`);
+        pathIndex++;
       }
     };
     
@@ -122,23 +127,23 @@ export default function GameCanvas() {
     
     basketballImg.onerror = () => {
       console.error(`Failed to load basketball from: ${basketballImg.src}`);
-      tryNextBasketballPath();
+      tryLoadBasketball();
     };
     
-    // Start loading process
-    tryNextBasketballPath();
+    // Start loading
+    tryLoadBasketball();
     
     const assets = {
       // Use basketball.png instead of emoji - ensure it loads properly
       playerImg: basketballImg,
       // Use Enemy_1.png instead of emoji
-      enemyImg: loadImage('/Enemy_1.png'),
-      spike: loadImage('/spike.png'),
-      spike2: loadImage('/spike_2.png'),
-      trampoline: loadImage('/trampoline.png'),
-      bgCourt: loadImage('/background_court.png'),
-      bgOcean: loadImage('/background_ocean.jpg'),
-      stall: loadImage('/stall.png'),
+      enemyImg: loadImage('Enemy_1.png'),
+      spike: loadImage('spike.png'),
+      spike2: loadImage('spike_2.png'),
+      trampoline: loadImage('trampoline.png'),
+      bgCourt: loadImage('background_court.png'),
+      bgOcean: loadImage('background_ocean.jpg'),
+      stall: loadImage('stall.png'),
       endMarker: loadImage(levelCfg.endMarker || levelCfg.endDecor),
       loopBg: loadImage(levelCfg.loopBg),
       startDecor: loadImage(levelCfg.startDecor),
@@ -177,10 +182,16 @@ export default function GameCanvas() {
 
   useEffect(() => {
     if (!loaded) return;
+    console.log('Game loaded, initializing game loop');
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const assets = assetsRef.current;
+    
+    // Debug log to verify assets
+    console.log('Assets loaded:', Object.keys(assets).map(key => 
+      `${key}: ${assets[key] ? (assets[key].complete ? 'complete' : 'loading') : 'missing'}`
+    ).join(', '));
 
     /* ------- Entity helper ------- */
     class Entity {
@@ -207,16 +218,23 @@ export default function GameCanvas() {
         // Draw debug outline for all entities to help with visibility
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.strokeRect(drawX, drawY, this.w, this.h);
+        
+        // Draw entity type for debugging
+        ctx.fillStyle = 'white';
+        ctx.font = '10px Arial';
+        ctx.fillText(this.isPlayer ? 'PLAYER' : 'ENTITY', drawX, drawY - 5);
 
         // Special handling for player to ensure visibility
         if (this.isPlayer) {
+          // Always draw debug outline for player
+          ctx.strokeStyle = 'rgba(255,255,0,0.7)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(drawX, drawY, this.w, this.h);
+          ctx.lineWidth = 1;
+          
           if (assets.playerImg && assets.playerImg.complete && assets.playerImg.naturalWidth > 0) {
             // Draw player with basketball.png image
             ctx.drawImage(assets.playerImg, drawX, drawY, this.w, this.h);
-            ctx.strokeStyle = 'rgba(255,255,0,0.7)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(drawX, drawY, this.w, this.h);
-            ctx.lineWidth = 1;
           } else {
             // Fallback to an orange basketball if image fails to load
             ctx.fillStyle = '#FF6600'; // Basketball orange
@@ -367,6 +385,7 @@ export default function GameCanvas() {
     // Create a fallback player representation (orange circle) in case image fails to load
     const player = new Entity(75, groundY - playerSize, playerSize, playerSize, assets.playerImg);
     player.isPlayer = true; // Flag to identify this entity as the player
+    console.log('Player entity created:', player);
     let cameraX = 0;
     let invulFrames = 60; // initial 1-sec invulnerability
 
@@ -414,25 +433,206 @@ export default function GameCanvas() {
         }
         setRestartKey(k => k + 1);
         return Math.max(0, next);
-      });
-    };
 
-    /* ------- Main game loop ------- */
-    function gameLoop() {
-      if (resettingRef.current) {
-        resettingRef.current = false;
-        invulFrames = 60;
-      }
-      if (gameOverRef.current) return;
-      
-      // Clear and draw background
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      
-      // Draw background image
-      if (assets.loopBg && assets.loopBg.complete) {
-        // Draw the scrolling background - place at the bottom of the screen
-        const bgWidth = CANVAS_WIDTH;
-        const bgHeight = CANVAS_HEIGHT - GROUND_H; // Leave space for ground
+/* ------- Main game loop ------- */
+function gameLoop() {
+// Debug log to verify game loop is running
+console.log('Game loop running, frame:', performance.now());
+if (resettingRef.current) {
+player.x = 75;
+player.y = groundY - player.h;
+player.vx = 0;
+player.vy = 0;
+cameraX = 0;
+resettingRef.current = false;
+invulFrames = 60;
+}
+if (gameOverRef.current) return;
+// Clear and draw background
+ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+// Fill with sky color to ensure we're drawing something
+ctx.fillStyle = '#87CEEB';
+ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+// Draw background image
+if (assets.loopBg && assets.loopBg.complete) {
+// Draw the scrolling background - place at the bottom of the screen
+const bgWidth = CANVAS_WIDTH;
+const bgHeight = CANVAS_HEIGHT - GROUND_H; // Leave space for ground
+const bgX = -cameraX * 0.5 % bgWidth; // Parallax effect
+// Draw multiple copies to fill the screen
+ctx.drawImage(assets.loopBg, bgX, 0, bgWidth, bgHeight);
+ctx.drawImage(assets.loopBg, bgX + bgWidth, 0, bgWidth, bgHeight);
+// Draw ground - solid color matching the background
+ctx.fillStyle = '#444';
+ctx.fillRect(0, groundY, CANVAS_WIDTH, GROUND_H);
+// Draw start decoration at beginning of level (flipped horizontally and standing on ground)
+if (assets.startDecor && assets.startDecor.complete) {
+const startDecorWidth = 300;
+const startDecorHeight = 300;
+const startDecorX = 0 - cameraX;
+const startDecorY = groundY - startDecorHeight; // Place exactly at ground level
+if (startDecorX + startDecorWidth > 0 && startDecorX < CANVAS_WIDTH) {
+// Save context state
+ctx.save();
+// Translate to the center of where we want to draw the image
+ctx.translate(startDecorX + startDecorWidth/2, startDecorY + startDecorHeight/2);
+// Flip horizontally
+ctx.scale(-1, 1);
+// Draw the image centered at the origin (0,0)
+ctx.drawImage(assets.startDecor, -startDecorWidth/2, -startDecorHeight/2, startDecorWidth, startDecorHeight);
+// Restore context state
+ctx.restore();
+}
+}
+// Draw end marker (pyramid)
+if (assets.endMarker && assets.endMarker.complete) {
+const endMarkerX = endMarkerEnt.x - cameraX;
+if (endMarkerX + endMarkerEnt.w > 0 && endMarkerX < CANVAS_WIDTH) {
+ctx.drawImage(assets.endMarker, endMarkerX, endMarkerEnt.y, endMarkerEnt.w, endMarkerEnt.h);
+}
+}
+}
+// Clear the screen first
+ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+// Draw background (sky color)
+ctx.fillStyle = '#87CEEB';
+ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+// Draw all platforms (ground, trampolines, stalls)
+platforms.forEach((p) => {
+try {
+p.draw(cameraX);
+} catch (err) {
+console.error('Error drawing platform:', err);
+}
+});
+// Draw all spikes
+spikes.forEach((s) => {
+try {
+s.draw(cameraX);
+} catch (err) {
+console.error('Error drawing spike:', err);
+}
+});
+// Draw all enemies
+enemies.forEach((e) => {
+try {
+e.draw(cameraX);
+} catch (err) {
+console.error('Error drawing enemy:', err);
+}
+});
+// Draw player
+try {
+player.draw(cameraX);
+// Draw a highlight around player to make it more visible
+const drawX = player.x - cameraX;
+const drawY = player.y;
+ctx.strokeStyle = 'yellow';
+ctx.lineWidth = 3;
+ctx.strokeRect(drawX, drawY, player.w, player.h);
+ctx.lineWidth = 1;
+} catch (err) {
+console.error('Error drawing player:', err);
+}
+// ----- Input -----
+player.vx = 0;
+if (keys.left) player.vx = -MOVE_SPEED;
+if (keys.right) player.vx = MOVE_SPEED;
+if ((keys.up || keys.space) && player.onGround) {
+player.vy = JUMP_VELOCITY;
+player.onGround = false;
+}
+// ----- Update entities -----
+const prevPlayerY = player.y;
+player.update();
+enemies.forEach((en) => {
+en.onGround = false; // reset each frame
+// More aggressive chase with variable speed
+const distToPlayer = Math.abs(player.x - en.x);
+const desiredDir = player.x < en.x ? -1 : 1;
+// Adjust speed based on distance to player
+let chaseSpeed = 2 * S;
+if (distToPlayer < 300) chaseSpeed = 3 * S; // Speed up when closer
+if (desiredDir !== Math.sign(en.vx) && en.turnCooldown <= 0) {
+en.vx = desiredDir * chaseSpeed;
+en.turnCooldown = 20; // third-second at 60fps
+}
+if (en.turnCooldown > 0) en.turnCooldown--;
+// Enhanced obstacle detection and jumping
+const sensorW = 140;
+const sensorX = en.vx > 0 ? en.x + en.w + 40 : en.x - sensorW - 40;
+const sensorRect = { x: sensorX, y: en.y - 60, w: sensorW, h: en.h + 60 };
+const intersects = (r,p)=>(!(r.x+r.w < p.x || r.x > p.x+p.w || r.y+r.h < p.y || r.y > p.y + p.h));
+// Check for obstacles (platforms, spikes, stalls)
+const needJump = platforms.some((p) => intersects(sensorRect, p) && p.y >= en.y && p.x > en.x) || 
+spikes.some((s) => intersects(sensorRect, s));
+// Also jump if approaching world end marker or if player is above
+const playerAbove = player.y < en.y - en.h && Math.abs(player.x - en.x) < 150;
+if (en.jumpCooldown <= 0 && en.onGround && (needJump || 
+(en.vx > 0 && endMarkerEnt.x - en.x < 200) || 
+playerAbove)) {
+en.vy = JUMP_VELOCITY * 0.9; // Slightly lower jump than player
+en.onGround = false;
+en.jumpCooldown = 45; // Prevent constant jumping
+}
+if (en.jumpCooldown > 0) en.jumpCooldown--;
+en.update();
+// enemy side/vertical collision with platforms
+platforms.forEach((p) => {
+// vertical
+if (
+en.vy >= 0 &&
+en.x + en.w > p.x &&
+en.x < p.x + p.w &&
+en.y + en.h <= p.y + en.vy &&
+en.y + en.h + en.vy >= p.y
+) {
+en.y = p.y - en.h;
+en.vy = 0;
+}
+// horizontal block
+if (en.y + en.h > p.y && en.y < p.y + p.h) {
+if (en.x < p.x && en.x + en.w > p.x) {
+en.x = p.x - en.w;
+} else if (en.x < p.x + p.w && en.x > p.x) {
+en.x = p.x + p.w;
+}
+}
+});
+// simple ground/platform collision for enemy
+platforms.forEach((p) => {
+if (
+en.vy >= 0 &&
+en.x + en.w > p.x &&
+en.x < p.x + p.w &&
+en.y + en.h <= p.y + en.vy &&
+en.y + en.h + en.vy >= p.y
+) {
+en.y = p.y - en.h;
+en.vy = 0;
+}
+});
+});
+// ----- Platform collisions -----
+player.onGround = false;
+// vertical collision (landing)
+platforms.forEach((p) => {
+if (
+player.vy >= 0 &&
+player.x + player.w > p.x &&
+player.x < p.x + p.w &&
+player.y + player.h <= p.y + player.vy &&
+player.y + player.h + player.vy >= p.y
+) {
+player.y = p.y - player.h;
+player.vy = p.bounceFactor > 0 ? JUMP_VELOCITY * p.bounceFactor : 0;
+player.onGround = true;
+}
+});
+// horizontal collision block (after vertical resolution)
+platforms.forEach((p) => {
+if (
+player.y + player.h > p.y && player.y < p.y + p.h // vertical overlap
         const bgX = -cameraX * 0.5 % bgWidth; // Parallax effect
         
         // Draw multiple copies to fill the screen
@@ -472,6 +672,55 @@ export default function GameCanvas() {
           }
         }
       }
+        // ----- Draw entities -----
+      // Clear the screen first
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // Draw background (sky color)
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // Draw all platforms (ground, trampolines, stalls)
+      platforms.forEach((p) => {
+        try {
+          p.draw(cameraX);
+        } catch (err) {
+          console.error('Error drawing platform:', err);
+        }
+      });
+      
+      // Draw all spikes
+      spikes.forEach((s) => {
+        try {
+          s.draw(cameraX);
+        } catch (err) {
+          console.error('Error drawing spike:', err);
+        }
+      });
+      
+      // Draw all enemies
+      enemies.forEach((e) => {
+        try {
+          e.draw(cameraX);
+        } catch (err) {
+          console.error('Error drawing enemy:', err);
+        }
+      });
+      
+      // Draw player
+      try {
+        player.draw(cameraX);
+        // Draw a highlight around player to make it more visible
+        const drawX = player.x - cameraX;
+        const drawY = player.y;
+        ctx.strokeStyle = 'yellow';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(drawX, drawY, player.w, player.h);
+        ctx.lineWidth = 1;
+      } catch (err) {
+        console.error('Error drawing player:', err);
+      }
+      
       // ----- Input -----
       player.vx = 0;
       if (keys.left) player.vx = -MOVE_SPEED;
@@ -630,6 +879,13 @@ export default function GameCanvas() {
         ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
       }
 
+      // Debug info - show what's being rendered
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      ctx.fillText(`Player: ${Math.round(player.x)},${Math.round(player.y)}`, 10, 40);
+      ctx.fillText(`Camera: ${Math.round(cameraX)}`, 10, 60);
+      ctx.fillText(`Entities: P:1 E:${enemies.length} S:${spikes.length} T:${trampolines.length} St:${stalls.length}`, 10, 80);
+      
       // schedule next frame
       if (!gameOverRef.current) requestAnimationFrame(gameLoop);
     }
