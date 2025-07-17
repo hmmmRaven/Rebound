@@ -162,21 +162,21 @@ export default function GameCanvas() {
         if (drawX + this.w < 0 || drawX > CANVAS_WIDTH) return; // off screen
 
         if (typeof this.img === 'string') {
+          // For emoji characters (player and enemies)
           ctx.font = `${this.h}px serif`;
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'top';
-          ctx.fillText(this.img, drawX, drawY);
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(this.img, drawX + this.w/2, drawY + this.h/2);
+          
+          // Debug outline to see entity boundaries
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.strokeRect(drawX, drawY, this.w, this.h);
         } else if (this.img && this.img.naturalWidth) {
-          // For ground, tile the image horizontally
-          if (this === ground && assets.groundImg && assets.groundImg.complete) {
-            const tileWidth = 128; // Adjust based on your ground image
-            const numTiles = Math.ceil(this.w / tileWidth);
-            for (let i = 0; i < numTiles; i++) {
-              const tileX = drawX + i * tileWidth;
-              if (tileX + tileWidth >= 0 && tileX <= CANVAS_WIDTH) {
-                ctx.drawImage(assets.groundImg, tileX, drawY, tileWidth, this.h);
-              }
-            }
+          // Don't use ground_city.png for the floor
+          if (this === ground) {
+            // Just draw a simple ground rectangle
+            ctx.fillStyle = '#444';
+            ctx.fillRect(drawX, drawY, this.w, this.h);
           } else {
             ctx.drawImage(this.img, drawX, drawY, this.w, this.h);
           }
@@ -200,26 +200,47 @@ export default function GameCanvas() {
     const groundY = CANVAS_HEIGHT - GROUND_H;
     const ground = new Entity(0, groundY, WORLD_WIDTH, GROUND_H, null, 0);
 
-    // random trampolines every ~600px
+    // Ensure we have enough trampolines throughout the level
     const endSafeX = WORLD_WIDTH - 400; // leave space before pyramid/end marker
     let nextX = 400;
     let trampolines = [];
+    
+    // First, add a trampoline near the beginning
+    trampolines.push(new Entity(300, groundY - 80, 160, 80, assets.trampoline, 1.4));
+    nextX = 700;
+    
+    // Then add more trampolines throughout the level
     while (nextX < endSafeX) {
-      const gap = 500 + Math.random() * 400;
+      const gap = 400 + Math.random() * 300; // Reduced gap for more trampolines
       const x = nextX + gap;
       // ensure we stay within safe zone
       if (x + 240 > endSafeX) break;
       // basic non-overlap check with previous trampoline
       if (trampolines.length === 0 || x - trampolines[trampolines.length - 1].x > 300) {
-        trampolines.push(new Entity(x, groundY - 120, 240, 120, assets.trampoline, 1.4));
+        trampolines.push(new Entity(x, groundY - 80, 160, 80, assets.trampoline, 1.4));
       }
       nextX = x;
     }
+    
+    // Ensure we have at least 4 trampolines
+    if (trampolines.length < 4) {
+      for (let i = trampolines.length; i < 4; i++) {
+        const x = 500 + i * 500;
+        if (x + 160 < endSafeX) {
+          trampolines.push(new Entity(x, groundY - 80, 160, 80, assets.trampoline, 1.4));
+        }
+      }
+    }
 
-    // stalls (static obstacles that don’t bounce)
+    // stalls (static obstacles that don't bounce) - ensure we have at least 3 stalls
     let stalls = [];
+    
+    // First ensure we have some stalls near the beginning
+    stalls.push(new Entity(500, groundY - 180, 240, 180, assets.stall, 0));
+    
+    // Then add more stalls throughout the level
     trampolines.forEach((t) => {
-      if (Math.random() < 0.7) {
+      if (Math.random() < 0.8) { // Increased probability
         const offset = 150 + Math.random() * 300;
         const x = t.x + t.w + offset;
         const stallW = 240;
@@ -230,6 +251,16 @@ export default function GameCanvas() {
         }
       }
     });
+    
+    // Ensure we have at least 3 stalls
+    if (stalls.length < 3) {
+      for (let i = stalls.length; i < 3; i++) {
+        const x = 800 + i * 600;
+        if (x + 240 < endSafeX) {
+          stalls.push(new Entity(x, groundY - 180, 240, 180, assets.stall, 0));
+        }
+      }
+    }
 
     const platforms = [ground, ...trampolines, ...stalls];
 
@@ -251,11 +282,14 @@ export default function GameCanvas() {
 
     // Spikes - place them strategically throughout the level
     const spikes = [
-      new Entity(800, groundY - 40, 40, 40, assets.spike),
-      new Entity(1200, groundY - 40, 40, 40, assets.spike2),
-      new Entity(1600, groundY - 40, 40, 40, assets.spike),
-      new Entity(2000, groundY - 40, 40, 40, assets.spike2),
-      new Entity(2400, groundY - 40, 40, 40, assets.spike),
+      new Entity(600, groundY - 40, 60, 40, assets.spike),
+      new Entity(900, groundY - 40, 60, 40, assets.spike2),
+      new Entity(1200, groundY - 40, 60, 40, assets.spike),
+      new Entity(1500, groundY - 40, 60, 40, assets.spike2),
+      new Entity(1800, groundY - 40, 60, 40, assets.spike),
+      new Entity(2100, groundY - 40, 60, 40, assets.spike2),
+      new Entity(2400, groundY - 40, 60, 40, assets.spike),
+      new Entity(2700, groundY - 40, 60, 40, assets.spike2),
     ];
 
     // Player (basketball)
@@ -332,15 +366,24 @@ export default function GameCanvas() {
         ctx.drawImage(assets.loopBg, bgX, 0, bgWidth, bgHeight);
         ctx.drawImage(assets.loopBg, bgX + bgWidth, 0, bgWidth, bgHeight);
         
-        // Draw start decoration at beginning of level
+        // Draw start decoration at beginning of level (flipped horizontally and at ground level)
         if (assets.startDecor && assets.startDecor.complete) {
           const startDecorWidth = 300;
           const startDecorHeight = 300;
           const startDecorX = 0 - cameraX;
-          const startDecorY = groundY - startDecorHeight;
+          const startDecorY = groundY - startDecorHeight; // Place at ground level
           
           if (startDecorX + startDecorWidth > 0 && startDecorX < CANVAS_WIDTH) {
-            ctx.drawImage(assets.startDecor, startDecorX, startDecorY, startDecorWidth, startDecorHeight);
+            // Save context state
+            ctx.save();
+            // Translate to the center of where we want to draw the image
+            ctx.translate(startDecorX + startDecorWidth/2, startDecorY + startDecorHeight/2);
+            // Flip horizontally
+            ctx.scale(-1, 1);
+            // Draw the image centered at the origin (0,0)
+            ctx.drawImage(assets.startDecor, -startDecorWidth/2, -startDecorHeight/2, startDecorWidth, startDecorHeight);
+            // Restore context state
+            ctx.restore();
           }
         }
         
