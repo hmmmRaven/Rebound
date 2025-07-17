@@ -26,7 +26,7 @@ const INITIAL_LIVES = 3;
 // Level definitions
 const LEVELS = [
   {
-    startDecor: '/background_court.jpg',
+    startDecor: '/background_court.png',
     loopBg: '/background_city.jpg',
     endDecor: '/pyramid.png',
     ground: '/ground_city.png',
@@ -96,7 +96,7 @@ export default function GameCanvas() {
       spike: loadImage('/spike.png'),
       spike2: loadImage('/spike_2.png'),
       trampoline: loadImage('/trampoline.png'),
-      bgCourt: loadImage('/background_court.jpg'),
+      bgCourt: loadImage('/background_court.png'),
       bgOcean: loadImage('/background_ocean.jpg'),
       stall: loadImage('/stall.png'),
       endMarker: loadImage(levelCfg.endMarker || levelCfg.endDecor),
@@ -167,7 +167,19 @@ export default function GameCanvas() {
           ctx.textBaseline = 'top';
           ctx.fillText(this.img, drawX, drawY);
         } else if (this.img && this.img.naturalWidth) {
-          ctx.drawImage(this.img, drawX, drawY, this.w, this.h);
+          // For ground, tile the image horizontally
+          if (this === ground && assets.groundImg && assets.groundImg.complete) {
+            const tileWidth = 128; // Adjust based on your ground image
+            const numTiles = Math.ceil(this.w / tileWidth);
+            for (let i = 0; i < numTiles; i++) {
+              const tileX = drawX + i * tileWidth;
+              if (tileX + tileWidth >= 0 && tileX <= CANVAS_WIDTH) {
+                ctx.drawImage(assets.groundImg, tileX, drawY, tileWidth, this.h);
+              }
+            }
+          } else {
+            ctx.drawImage(this.img, drawX, drawY, this.w, this.h);
+          }
         } else {
           // fallback rectangle for ground
           ctx.fillStyle = '#444';
@@ -221,45 +233,52 @@ export default function GameCanvas() {
 
     const platforms = [ground, ...trampolines, ...stalls];
 
-    // enemies
-    const enemies = Array.from({ length: 6 }).map((_, i) => {
-      const x = 800 + i * 400;
+    // enemies - place them strategically throughout the level
+    const enemies = Array.from({ length: 8 }).map((_, i) => {
+      const x = 600 + i * 500; // More spread out
       const emoji = assets.playerEmojis[Math.floor(Math.random() * assets.playerEmojis.length)];
-      const width = 80;
-      const height = 120;
+      const width = 60;
+      const height = 80;
       const e = new Entity(x, groundY - height, width, height, emoji);
       e.turnCooldown = 0;
+      e.jumpCooldown = 0;
       return e;
     });
 
-    // spikes
-    const PYRAMID_SIZE = 500;
+    // End marker (pyramid)
+    const PYRAMID_SIZE = 200;
     const endMarkerEnt = new Entity(WORLD_WIDTH - PYRAMID_SIZE - 100, groundY - PYRAMID_SIZE, PYRAMID_SIZE, PYRAMID_SIZE, assets.endMarker);
 
+    // Spikes - place them strategically throughout the level
     const spikes = [
-      new Entity(1000, groundY - 40, 40, 40, assets.spike),
-      new Entity(1600, groundY - 40, 40, 40, assets.spike2),
+      new Entity(800, groundY - 40, 40, 40, assets.spike),
+      new Entity(1200, groundY - 40, 40, 40, assets.spike2),
+      new Entity(1600, groundY - 40, 40, 40, assets.spike),
+      new Entity(2000, groundY - 40, 40, 40, assets.spike2),
+      new Entity(2400, groundY - 40, 40, 40, assets.spike),
     ];
 
-    // player
-    const player = new Entity(75, groundY - 75, 75, 75, assets.ballEmoji);
+    // Player (basketball)
+    const player = new Entity(75, groundY - 75, 60, 60, assets.ballEmoji);
     let cameraX = 0;
     let invulFrames = 60; // initial 1-sec invulnerability
 
     /* ------- Input ------- */
-    const keys = { left: false, right: false, up: false };
+    const keys = { left: false, right: false, up: false, space: false };
 
     const onKeyDown = (e) => {
       if (gameOverRef.current) return;
       if (e.code === 'ArrowLeft') keys.left = true;
       if (e.code === 'ArrowRight') keys.right = true;
-      if (e.code === 'ArrowUp') keys.up = true;
+      if (e.code === 'ArrowUp' || e.code === 'Space') keys.up = true;
+      if (e.code === 'Space') keys.space = true;
     };
     const onKeyUp = (e) => {
       if (gameOverRef.current) return;
       if (e.code === 'ArrowLeft') keys.left = false;
       if (e.code === 'ArrowRight') keys.right = false;
       if (e.code === 'ArrowUp') keys.up = false;
+      if (e.code === 'Space') keys.space = false;
     };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
@@ -301,13 +320,43 @@ export default function GameCanvas() {
       
       // Clear and draw background
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      ctx.fillStyle = '#87CEEB'; // Sky blue background
-      ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      
+      // Draw background image
+      if (assets.loopBg && assets.loopBg.complete) {
+        // Draw the scrolling background
+        const bgWidth = CANVAS_WIDTH;
+        const bgHeight = CANVAS_HEIGHT;
+        const bgX = -cameraX * 0.5 % bgWidth; // Parallax effect
+        
+        // Draw multiple copies to fill the screen
+        ctx.drawImage(assets.loopBg, bgX, 0, bgWidth, bgHeight);
+        ctx.drawImage(assets.loopBg, bgX + bgWidth, 0, bgWidth, bgHeight);
+        
+        // Draw start decoration at beginning of level
+        if (assets.startDecor && assets.startDecor.complete) {
+          const startDecorWidth = 300;
+          const startDecorHeight = 300;
+          const startDecorX = 0 - cameraX;
+          const startDecorY = groundY - startDecorHeight;
+          
+          if (startDecorX + startDecorWidth > 0 && startDecorX < CANVAS_WIDTH) {
+            ctx.drawImage(assets.startDecor, startDecorX, startDecorY, startDecorWidth, startDecorHeight);
+          }
+        }
+        
+        // Draw end marker (pyramid)
+        if (assets.endMarker && assets.endMarker.complete) {
+          const endMarkerX = endMarkerEnt.x - cameraX;
+          if (endMarkerX + endMarkerEnt.w > 0 && endMarkerX < CANVAS_WIDTH) {
+            ctx.drawImage(assets.endMarker, endMarkerX, endMarkerEnt.y, endMarkerEnt.w, endMarkerEnt.h);
+          }
+        }
+      }
       // ----- Input -----
       player.vx = 0;
       if (keys.left) player.vx = -MOVE_SPEED;
       if (keys.right) player.vx = MOVE_SPEED;
-      if (keys.up && player.onGround) {
+      if ((keys.up || keys.space) && player.onGround) {
         player.vy = JUMP_VELOCITY;
         player.onGround = false;
       }
@@ -317,27 +366,41 @@ export default function GameCanvas() {
       player.update();
       enemies.forEach((en) => {
         en.onGround = false; // reset each frame
-        // simple chase
+        // More aggressive chase with variable speed
+        const distToPlayer = Math.abs(player.x - en.x);
         const desiredDir = player.x < en.x ? -1 : 1;
+        
+        // Adjust speed based on distance to player
+        let chaseSpeed = 2 * S;
+        if (distToPlayer < 300) chaseSpeed = 3 * S; // Speed up when closer
+        
         if (desiredDir !== Math.sign(en.vx) && en.turnCooldown <= 0) {
-          en.vx = desiredDir * 2 * S;
-          en.turnCooldown = 30; // half-second at 60fps
+          en.vx = desiredDir * chaseSpeed;
+          en.turnCooldown = 20; // third-second at 60fps
         }
-        if (en.turnCooldown > 0) en.turnCooldown--; 
-        // jump over obstacle using sensor rectangle
+        if (en.turnCooldown > 0) en.turnCooldown--;
+        
+        // Enhanced obstacle detection and jumping
         const sensorW = 140;
-        const sensorX = en.vx > 0 ? en.x + en.w + 60 : en.x - sensorW - 60;
+        const sensorX = en.vx > 0 ? en.x + en.w + 40 : en.x - sensorW - 40;
         const sensorRect = { x: sensorX, y: en.y - 60, w: sensorW, h: en.h + 60 };
         const intersects = (r,p)=>(!(r.x+r.w < p.x || r.x > p.x+p.w || r.y+r.h < p.y || r.y > p.y + p.h));
-        const needJump = platforms.some((p) => intersects(sensorRect, p) && p.y >= en.y && p.x > en.x);
-        // also jump if approaching world end marker
-        if (!needJump && en.vx > 0 && endMarkerEnt.x - en.x < 200) {
-          en.vy = JUMP_VELOCITY;
-        }
-        if (needJump && en.onGround) {
-          en.vy = JUMP_VELOCITY;
+        
+        // Check for obstacles (platforms, spikes, stalls)
+        const needJump = platforms.some((p) => intersects(sensorRect, p) && p.y >= en.y && p.x > en.x) || 
+                         spikes.some((s) => intersects(sensorRect, s));
+        // Also jump if approaching world end marker or if player is above
+        const playerAbove = player.y < en.y - en.h && Math.abs(player.x - en.x) < 150;
+        
+        if (en.jumpCooldown <= 0 && en.onGround && (needJump || 
+            (en.vx > 0 && endMarkerEnt.x - en.x < 200) || 
+            playerAbove)) {
+          en.vy = JUMP_VELOCITY * 0.9; // Slightly lower jump than player
           en.onGround = false;
+          en.jumpCooldown = 45; // Prevent constant jumping
         }
+        
+        if (en.jumpCooldown > 0) en.jumpCooldown--;
         en.update();
         // enemy side/vertical collision with platforms
         platforms.forEach((p) => {
@@ -407,15 +470,15 @@ export default function GameCanvas() {
 
       // ----- Enemy & spike collisions -----
       enemies.forEach((e) => {
-        if (player.intersects(e)) {
+        if (player.intersects(e) && invulFrames === 0) {
           // Determine if stomp: player must be descending and above half enemy height
           const descending = player.vy > 0;
-          const stompZone = e.y + e.h * 0.5; // top half is vulnerable
+          const stompZone = e.y + e.h * 0.3; // top third is vulnerable for stomping
           const stomp = descending && player.y + player.h <= stompZone;
           if (stomp) {
             // defeat enemy
             enemies.splice(enemies.indexOf(e), 1);
-            player.vy = JUMP_VELOCITY;
+            player.vy = JUMP_VELOCITY * 0.8; // Bounce after stomping, but not full jump
           } else {
             loseLife();
           }
@@ -427,6 +490,7 @@ export default function GameCanvas() {
 
       // ----- Level completion check -----
       if (player.intersects(endMarkerEnt)) {
+        // Play a success sound or animation here if needed
         setLevelComplete(true);
         return; // stop loop
       }
@@ -455,23 +519,34 @@ export default function GameCanvas() {
   /* -------------- Level complete overlay -------------- */
   const overlayButtons = levelComplete && (
     <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',background:'rgba(0,0,0,0.6)'}}>
-      <h1>Level Complete!</h1>
+      <h1 style={{fontSize:'48px',marginBottom:'20px'}}>Level Cleared!</h1>
+      <p style={{fontSize:'24px',marginBottom:'30px'}}>Congratulations! You've reached the pyramid!</p>
       <div style={{display:'flex',gap:'20px'}}>
-        <button onClick={() => {
-          assetsRef.current = null;
-          setLoaded(false);
-          setLevelComplete(false);
-          setLives(INITIAL_LIVES);
-          setLevelIdx(idx => (idx < LEVELS.length - 1 ? idx + 1 : 0));
-        }}>Next</button>
-        <button onClick={() => {
-          assetsRef.current = null;
-          setLoaded(false);
-          setLevelComplete(false);
-          setRestartKey(k => k + 1);
-          setLives(INITIAL_LIVES);
-          resetPlayer();
-        }}>Replay</button>
+        <button 
+          style={{padding:'15px 30px',fontSize:'20px',background:'#4CAF50',color:'white',border:'none',borderRadius:'5px',cursor:'pointer'}}
+          onClick={() => {
+            assetsRef.current = null;
+            setLoaded(false);
+            setLevelComplete(false);
+            setLives(INITIAL_LIVES);
+            setLevelIdx(idx => (idx < LEVELS.length - 1 ? idx + 1 : 0));
+          }}
+        >
+          Next Level
+        </button>
+        <button 
+          style={{padding:'15px 30px',fontSize:'20px',background:'#2196F3',color:'white',border:'none',borderRadius:'5px',cursor:'pointer'}}
+          onClick={() => {
+            assetsRef.current = null;
+            setLoaded(false);
+            setLevelComplete(false);
+            setRestartKey(k => k + 1);
+            setLives(INITIAL_LIVES);
+            resetPlayer();
+          }}
+        >
+          Replay Level
+        </button>
       </div>
     </div>
   );
@@ -479,15 +554,21 @@ export default function GameCanvas() {
   /* -------------- Game over overlay -------------- */
   const gameOverOverlay = gameOver && (
     <div style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff',background:'rgba(0,0,0,0.6)'}}>
-      <h1>Game Over</h1>
-      <button onClick={() => { 
-        setGameOver(false);
-        gameOverRef.current = false;
-        setLoaded(false);
-        assetsRef.current = null;
-        setLives(INITIAL_LIVES);
-        setRestartKey(k => k + 1);
-      }}>Restart Game</button>
+      <h1 style={{fontSize:'48px',marginBottom:'20px'}}>Game Over</h1>
+      <p style={{fontSize:'24px',marginBottom:'30px'}}>You lost all your lives!</p>
+      <button 
+        style={{padding:'15px 30px',fontSize:'20px',background:'#F44336',color:'white',border:'none',borderRadius:'5px',cursor:'pointer'}}
+        onClick={() => { 
+          setGameOver(false);
+          gameOverRef.current = false;
+          setLoaded(false);
+          assetsRef.current = null;
+          setLives(INITIAL_LIVES);
+          setRestartKey(k => k + 1);
+        }}
+      >
+        Restart Game
+      </button>
     </div>
   );
 
