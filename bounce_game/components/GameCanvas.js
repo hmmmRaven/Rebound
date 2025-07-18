@@ -14,11 +14,15 @@ export default function GameCanvas() {
   const CANVAS_WIDTH = 800;
   const CANVAS_HEIGHT = 600;
   
+  // Constants for ground level
+  const GROUND_HEIGHT = 40; // Height of the ground image
+  const GROUND_LEVEL = 580 - GROUND_HEIGHT; // Top of ground image
+  
   // Game state
   const gameState = useRef({
     ball: {
       x: 100,
-      y: 580 - 20, // Ground level - radius
+      y: GROUND_LEVEL - 20, // Ground level - radius
       radius: 20,
       velocityX: 0,
       velocityY: 0,
@@ -32,7 +36,7 @@ export default function GameCanvas() {
     },
     pointA: {
       x: 50,
-      y: 580 - 300, // Ground level - height
+      y: GROUND_LEVEL - 300, // Ground level - height
       width: 300,
       height: 300,
       image: null,
@@ -40,7 +44,7 @@ export default function GameCanvas() {
     },
     pointB: {
       x: LEVEL_WIDTH - 400, // Adjusted for larger size
-      y: 580, // Ground level
+      y: GROUND_LEVEL, // Ground level
       size: 800, // 20x bigger (40 * 20)
       image: null
     },
@@ -201,7 +205,7 @@ export default function GameCanvas() {
         
         enemies.push({
           x: x,
-          y: 580 - 30, // Ground level - enemy height/2
+          y: GROUND_LEVEL - 30, // Ground level - enemy height/2
           width: 60,
           height: 60,
           velocityX: Math.random() * 4 - 2, // Random velocity between -2 and 2
@@ -221,7 +225,7 @@ export default function GameCanvas() {
       const { ball } = gameState.current;
       
       // Check if on ground
-      if (ball.y + ball.radius >= 580) { // Ground level
+      if (ball.y + ball.radius >= GROUND_LEVEL) { // Ground level
         return true;
       }
       
@@ -333,8 +337,8 @@ export default function GameCanvas() {
       }
       
       // Ground collision
-      if (ball.y + ball.radius > 580) { // Ground level
-        ball.y = 580 - ball.radius;
+      if (ball.y + ball.radius > GROUND_LEVEL) { // Ground level
+        ball.y = GROUND_LEVEL - ball.radius;
         ball.velocityY = 0;
         ball.onGround = true;
       }
@@ -406,12 +410,10 @@ export default function GameCanvas() {
       const { ball, camera, pointA, pointB, background, ground, enemies } = gameState.current;
       
       try {
-        // Draw background
+        // Draw background - static, not scrolling
         if (background.image && background.image.complete && background.image.naturalWidth > 0) {
-          // Parallax scrolling - background moves slower than foreground
-          const parallaxFactor = 0.4;
-          const bgX = -camera.x * parallaxFactor;
-          ctx.drawImage(background.image, bgX, 0, canvas.width, canvas.height);
+          // Background stays fixed and doesn't scroll with camera
+          ctx.drawImage(background.image, 0, 0, canvas.width, canvas.height);
         } else {
           // Fallback background
           ctx.fillStyle = '#87CEEB'; // Sky blue
@@ -426,9 +428,19 @@ export default function GameCanvas() {
       try {
         // Draw ground - repeated across the level
         if (ground.image && ground.image.complete && ground.image.naturalWidth > 0) {
-          const groundPattern = ctx.createPattern(ground.image, 'repeat');
-          ctx.fillStyle = groundPattern || '#8B4513';
-          ctx.fillRect(-camera.x, 580 - ground.height, LEVEL_WIDTH, ground.height + 100);
+          // Draw ground tiles across the level
+          const groundY = 580 - ground.height;
+          const tileWidth = ground.image.width || 64; // Assuming 64px if width not available
+          
+          // Calculate how many tiles we need to cover the visible area
+          const startTile = Math.floor(camera.x / tileWidth);
+          const endTile = Math.ceil((camera.x + canvas.width) / tileWidth);
+          
+          // Draw each tile
+          for (let i = startTile; i <= endTile; i++) {
+            const x = i * tileWidth - camera.x;
+            ctx.drawImage(ground.image, x, groundY, tileWidth, ground.height);
+          }
         } else {
           // Fallback ground
           ctx.fillStyle = '#8B4513'; // Brown
