@@ -205,13 +205,13 @@ export default function GameCanvas() {
         
         enemies.push({
           x: x,
-          y: GROUND_LEVEL - 30, // Ground level - enemy height/2
+          y: GROUND_LEVEL - 30, // Position on top of ground
           width: 60,
           height: 60,
-          velocityX: Math.random() * 4 - 2, // Random velocity between -2 and 2
+          velocityX: 0,
           velocityY: 0,
           detectionRadius: 200, // How close the ball needs to be for enemy to chase
-          chaseSpeed: 1 + Math.random() * 2, // Random chase speed between 1 and 3
+          chaseSpeed: 3, // Constant speed for all enemies
           dead: false,
           image: null // Will be assigned from enemyImages later
         });
@@ -444,7 +444,7 @@ export default function GameCanvas() {
         // Draw ground - repeated across the level
         if (ground.image && ground.image.complete && ground.image.naturalWidth > 0) {
           // Draw ground tiles across the level
-          const groundY = 580 - ground.height;
+          const groundY = canvas.height - ground.height; // Position at bottom of screen
           const tileWidth = ground.image.width || 64; // Assuming 64px if width not available
           
           // Calculate how many tiles we need to cover the visible area
@@ -459,12 +459,12 @@ export default function GameCanvas() {
         } else {
           // Fallback ground
           ctx.fillStyle = '#8B4513'; // Brown
-          ctx.fillRect(-camera.x, 580 - ground.height, LEVEL_WIDTH, ground.height + 100);
+          ctx.fillRect(-camera.x, canvas.height - ground.height, LEVEL_WIDTH, ground.height);
         }
       } catch (error) {
         console.error('Error drawing ground:', error);
         ctx.fillStyle = '#8B4513'; // Brown
-        ctx.fillRect(-camera.x, 580 - ground.height, LEVEL_WIDTH, ground.height + 100);
+        ctx.fillRect(-camera.x, canvas.height - ground.height, LEVEL_WIDTH, ground.height);
       }
       
       try {
