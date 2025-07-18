@@ -25,11 +25,11 @@ export default function GameCanvas() {
   // Enemy types
   const enemyTypes = ['Enemy_1.png', 'dog_chase.png'];
   
-  // Image references
+  // Image references - initialized as empty objects to be filled in useEffect
   const imageRefs = useRef({
-    ball: new Image(),
-    background: new Image(),
-    ground: new Image(),
+    ball: null,
+    background: null,
+    ground: null,
     enemies: {}
   });
   
@@ -70,50 +70,58 @@ export default function GameCanvas() {
     groundImage: null
   });
 
-  // Load images
+  // Load images - only runs in browser environment
   useEffect(() => {
-    // Load ball image
-    imageRefs.current.ball.src = '/images/basketball.png';
-    imageRefs.current.ball.onload = () => {
-      gameState.current.ball.image = imageRefs.current.ball;
-    };
-    
-    // Load background image
-    imageRefs.current.background.src = '/images/background_city.jpg';
-    imageRefs.current.background.onload = () => {
-      gameState.current.background = imageRefs.current.background;
-    };
-    
-    // Load ground image
-    imageRefs.current.ground.src = '/images/ground_city.png';
-    imageRefs.current.ground.onload = () => {
-      gameState.current.groundImage = imageRefs.current.ground;
-    };
-    
-    // Preload enemy images
-    enemyTypes.forEach(type => {
-      imageRefs.current.enemies[type] = new Image();
-      imageRefs.current.enemies[type].src = `/images/${type}`;
-    });
-    
-    // Assign random enemy images
-    gameState.current.enemies.forEach(enemy => {
-      const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-      enemy.imageType = randomType;
-    });
-    
-    // Set images loaded flag
-    const checkAllImagesLoaded = setInterval(() => {
-      if (gameState.current.ball.image && 
-          gameState.current.background && 
-          gameState.current.groundImage && 
-          Object.keys(imageRefs.current.enemies).every(key => imageRefs.current.enemies[key].complete)) {
-        setImagesLoaded(true);
-        clearInterval(checkAllImagesLoaded);
-      }
-    }, 100);
-    
-    return () => clearInterval(checkAllImagesLoaded);
+    // Initialize images only on client-side
+    if (typeof window !== 'undefined') {
+      // Create Image objects
+      imageRefs.current.ball = new Image();
+      imageRefs.current.background = new Image();
+      imageRefs.current.ground = new Image();
+      
+      // Load ball image
+      imageRefs.current.ball.src = '/images/basketball.png';
+      imageRefs.current.ball.onload = () => {
+        gameState.current.ball.image = imageRefs.current.ball;
+      };
+      
+      // Load background image
+      imageRefs.current.background.src = '/images/background_city.jpg';
+      imageRefs.current.background.onload = () => {
+        gameState.current.background = imageRefs.current.background;
+      };
+      
+      // Load ground image
+      imageRefs.current.ground.src = '/images/ground_city.png';
+      imageRefs.current.ground.onload = () => {
+        gameState.current.groundImage = imageRefs.current.ground;
+      };
+      
+      // Preload enemy images
+      enemyTypes.forEach(type => {
+        imageRefs.current.enemies[type] = new Image();
+        imageRefs.current.enemies[type].src = `/images/${type}`;
+      });
+      
+      // Assign random enemy images
+      gameState.current.enemies.forEach(enemy => {
+        const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+        enemy.imageType = randomType;
+      });
+      
+      // Set images loaded flag
+      const checkAllImagesLoaded = setInterval(() => {
+        if (gameState.current.ball.image && 
+            gameState.current.background && 
+            gameState.current.groundImage && 
+            Object.keys(imageRefs.current.enemies).every(key => imageRefs.current.enemies[key].complete)) {
+          setImagesLoaded(true);
+          clearInterval(checkAllImagesLoaded);
+        }
+      }, 100);
+      
+      return () => clearInterval(checkAllImagesLoaded);
+    }
   }, []);
   
   // Handle keyboard input
@@ -267,9 +275,12 @@ export default function GameCanvas() {
       }
     }
   };
-
+  
   // Game loop
   useEffect(() => {
+    // Only run canvas code in browser environment
+    if (typeof window === 'undefined' || !canvasRef.current) return;
+    
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
