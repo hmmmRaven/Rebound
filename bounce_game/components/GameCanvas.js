@@ -7,10 +7,22 @@ export default function GameCanvas() {
   const canvasRef = useRef(null);
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [totalImagesLoaded, setTotalImagesLoaded] = useState(0);
-  const totalImagesToLoad = useRef(5); // Ball, background, ground, pointA, pointB
+  const totalImagesToLoad = useRef(7); // Ball, background, ground, pointA, pointB, enemy_1, enemy_2
+  
+  // Level layout from CSV
+  const levelGrid = [
+    ['air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air'],
+    ['air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air'],
+    ['air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air'],
+    ['air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air'],
+    ['air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air', 'air'],
+    ['Spawn', 'player', 'air', 'enemy_1', 'air', 'air', 'air', 'enemy_2', 'air', 'end'],
+    ['ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png', 'ground_city.png']
+  ];
   
   // Constants
-  const LEVEL_WIDTH = 4000; // 5x the canvas width
+  const GRID_SIZE = 64; // Size of each grid cell in pixels
+  const LEVEL_WIDTH = levelGrid[0].length * GRID_SIZE; // Width based on grid
   const CANVAS_WIDTH = 800;
   const CANVAS_HEIGHT = 600;
   
@@ -35,17 +47,17 @@ export default function GameCanvas() {
       x: 0,
     },
     pointA: {
-      x: 50,
-      y: GROUND_LEVEL - 300, // Ground level - height
-      width: 192, // Reduced by another 20% (total 36% reduction from original 300)
+      x: 0, // Will be set based on grid
+      y: 0, // Will be set based on grid
+      width: 192,
       height: 300,
       image: null,
       flipHorizontal: true // Flag to flip the image horizontally
     },
     pointB: {
-      x: LEVEL_WIDTH - 400, // Adjusted for larger size
-      y: GROUND_LEVEL, // Ground level
-      size: 800, // 20x bigger (40 * 20)
+      x: 0, // Will be set based on grid
+      y: 0, // Will be set based on grid
+      size: 64, // Size based on grid
       image: null
     },
     background: {
@@ -66,7 +78,10 @@ export default function GameCanvas() {
       left: false,
       right: false,
       up: false
-    }
+    },
+    // Grid-based level data
+    grid: levelGrid,
+    gridSize: GRID_SIZE
   });
 
   useEffect(() => {
@@ -167,6 +182,21 @@ export default function GameCanvas() {
     ground.src = '/images/ground_city.png';
     gameState.current.ground.image = ground;
     
+    // Initialize game objects based on grid
+    // Set initial positions for point A and point B
+    for (let row = 0; row < levelGrid.length; row++) {
+      for (let col = 0; col < levelGrid[row].length; col++) {
+        if (levelGrid[row][col] === 'Spawn') {
+          gameState.current.pointA.x = col * GRID_SIZE;
+          gameState.current.pointA.y = row * GRID_SIZE;
+        }
+        if (levelGrid[row][col] === 'end') {
+          gameState.current.pointB.x = col * GRID_SIZE + GRID_SIZE / 2;
+          gameState.current.pointB.y = row * GRID_SIZE + GRID_SIZE;
+        }
+      }
+    }
+    
     // Handle keyboard input
     const handleKeyDown = (e) => {
       if (e.key === 'ArrowLeft') gameState.current.keys.left = true;
@@ -192,29 +222,30 @@ export default function GameCanvas() {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     
-    // Generate enemies
+    // Generate enemies from grid
     function generateEnemies() {
       const enemies = [];
-      const numEnemies = 8;
       
-      for (let i = 0; i < numEnemies; i++) {
-        // Distribute enemies throughout the level, avoiding start and end areas
-        const minX = 400; // Avoid starting area
-        const maxX = LEVEL_WIDTH - 800; // Avoid ending area
-        const x = minX + Math.random() * (maxX - minX);
-        
-        enemies.push({
-          x: x,
-          y: GROUND_LEVEL - 30, // Position on top of ground
-          width: 60,
-          height: 60,
-          velocityX: 0,
-          velocityY: 0,
-          detectionRadius: 200, // How close the ball needs to be for enemy to chase
-          chaseSpeed: 3, // Constant speed for all enemies
-          dead: false,
-          image: null // Will be assigned from enemyImages later
-        });
+      // Find enemies in the grid
+      for (let row = 0; row < levelGrid.length; row++) {
+        for (let col = 0; col < levelGrid[row].length; col++) {
+          const cell = levelGrid[row][col];
+          if (cell === 'enemy_1' || cell === 'enemy_2') {
+            enemies.push({
+              x: col * GRID_SIZE + GRID_SIZE / 2, // Center of the grid cell
+              y: row * GRID_SIZE + GRID_SIZE / 2, // Center of the grid cell
+              width: 60,
+              height: 60,
+              velocityX: 0,
+              velocityY: 0,
+              detectionRadius: 200,
+              chaseSpeed: 3,
+              dead: false,
+              enemyType: cell, // Store the enemy type
+              image: null // Will be assigned from enemyImages later
+            });
+          }
+        }
       }
       
       return enemies;
@@ -222,10 +253,25 @@ export default function GameCanvas() {
     
     // Check if ball is on ground or platform
     function isOnGround() {
-      const { ball } = gameState.current;
+      const { ball, grid, gridSize } = gameState.current;
       
-      // Check if on ground
-      if (ball.y + ball.radius >= GROUND_LEVEL) { // Ground level
+      // Calculate grid position
+      const gridX = Math.floor(ball.x / gridSize);
+      const gridY = Math.floor((ball.y + ball.radius + 1) / gridSize); // Check just below the ball
+      
+      // Check if position is within grid bounds
+      if (gridY >= 0 && gridY < grid.length && gridX >= 0 && gridX < grid[0].length) {
+        // Check if the cell below contains ground
+        const cellBelow = grid[gridY][gridX];
+        if (cellBelow && cellBelow.includes('ground')) {
+          // Adjust ball position to sit on top of ground
+          ball.y = gridY * gridSize - ball.radius;
+          return true;
+        }
+      }
+      
+      // Check if on bottom of screen (fallback)
+      if (ball.y + ball.radius >= GROUND_LEVEL) {
         return true;
       }
       
@@ -261,12 +307,26 @@ export default function GameCanvas() {
     
     // Reset game state
     function resetGame() {
+      // Find player position in grid
+      let playerX = 100;
+      let playerY = 580 - 20;
+      
+      // Find player in grid
+      for (let row = 0; row < levelGrid.length; row++) {
+        for (let col = 0; col < levelGrid[row].length; col++) {
+          if (levelGrid[row][col] === 'player') {
+            playerX = col * GRID_SIZE + GRID_SIZE / 2;
+            playerY = row * GRID_SIZE + GRID_SIZE / 2;
+          }
+        }
+      }
+      
       gameState.current = {
         ...gameState.current,
         ball: {
           ...gameState.current.ball,
-          x: 100,
-          y: 580 - 20,
+          x: playerX,
+          y: playerY,
           velocityX: 0,
           velocityY: 0,
           onGround: true
@@ -287,9 +347,23 @@ export default function GameCanvas() {
       
       // Assign preloaded enemy images to enemies
       for (const enemy of gameState.current.enemies) {
-        // Randomly select enemy type
-        const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-        enemy.image = enemyImages[randomType];
+        // Assign image based on enemy type
+        const imageType = enemy.enemyType === 'enemy_1' ? 'Enemy_1.png' : 'dog_chase.png';
+        enemy.image = enemyImages[imageType];
+      }
+      
+      // Set point A and point B positions based on grid
+      for (let row = 0; row < levelGrid.length; row++) {
+        for (let col = 0; col < levelGrid[row].length; col++) {
+          if (levelGrid[row][col] === 'Spawn') {
+            gameState.current.pointA.x = col * GRID_SIZE;
+            gameState.current.pointA.y = row * GRID_SIZE;
+          }
+          if (levelGrid[row][col] === 'end') {
+            gameState.current.pointB.x = col * GRID_SIZE + GRID_SIZE / 2;
+            gameState.current.pointB.y = row * GRID_SIZE + GRID_SIZE;
+          }
+        }
       }
     }
     
@@ -415,7 +489,7 @@ export default function GameCanvas() {
     
     // Render the game scene
     function renderScene() {
-      const { ball, camera, pointA, pointB, background, ground, enemies } = gameState.current;
+      const { ball, camera, pointA, pointB, background, ground, enemies, grid, gridSize } = gameState.current;
       
       try {
         // Draw background - static, not scrolling
@@ -433,31 +507,75 @@ export default function GameCanvas() {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       
+      // Draw grid-based level (for debugging)
+      // for (let row = 0; row < grid.length; row++) {
+      //   for (let col = 0; col < grid[row].length; col++) {
+      //     const cellX = col * gridSize - camera.x;
+      //     const cellY = row * gridSize;
+      //     
+      //     // Only draw cells that are visible on screen
+      //     if (cellX > -gridSize && cellX < canvas.width && cellY > -gridSize && cellY < canvas.height) {
+      //       // Draw grid cell outline
+      //       ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      //       ctx.strokeRect(cellX, cellY, gridSize, gridSize);
+      //       
+      //       // Draw cell type for debugging
+      //       ctx.fillStyle = 'white';
+      //       ctx.font = '10px Arial';
+      //       ctx.fillText(grid[row][col], cellX + 2, cellY + 10);
+      //     }
+      //   }
+      // }
+      
       try {
-        // Draw ground - repeated across the level
+        // Draw ground based on grid
         if (ground.image && ground.image.complete && ground.image.naturalWidth > 0) {
-          // Draw ground tiles across the level
-          const groundY = canvas.height - ground.height; // Position at bottom of screen
-          const tileWidth = ground.image.width || 64; // Assuming 64px if width not available
-          
-          // Calculate how many tiles we need to cover the visible area
-          const startTile = Math.floor(camera.x / tileWidth);
-          const endTile = Math.ceil((camera.x + canvas.width) / tileWidth);
-          
-          // Draw each tile
-          for (let i = startTile; i <= endTile; i++) {
-            const x = i * tileWidth - camera.x;
-            ctx.drawImage(ground.image, x, groundY, tileWidth, ground.height);
+          // Draw ground tiles where specified in the grid
+          for (let row = 0; row < grid.length; row++) {
+            for (let col = 0; col < grid[row].length; col++) {
+              if (grid[row][col].includes('ground')) {
+                const cellX = col * gridSize - camera.x;
+                const cellY = row * gridSize;
+                
+                // Only draw if visible on screen
+                if (cellX > -gridSize && cellX < canvas.width && cellY > -gridSize && cellY < canvas.height) {
+                  ctx.drawImage(ground.image, cellX, cellY, gridSize, ground.height);
+                }
+              }
+            }
           }
         } else {
           // Fallback ground
-          ctx.fillStyle = '#8B4513'; // Brown
-          ctx.fillRect(-camera.x, canvas.height - ground.height, LEVEL_WIDTH, ground.height);
+          for (let row = 0; row < grid.length; row++) {
+            for (let col = 0; col < grid[row].length; col++) {
+              if (grid[row][col].includes('ground')) {
+                const cellX = col * gridSize - camera.x;
+                const cellY = row * gridSize;
+                
+                if (cellX > -gridSize && cellX < canvas.width && cellY > -gridSize && cellY < canvas.height) {
+                  ctx.fillStyle = '#8B4513'; // Brown
+                  ctx.fillRect(cellX, cellY, gridSize, ground.height);
+                }
+              }
+            }
+          }
         }
       } catch (error) {
         console.error('Error drawing ground:', error);
-        ctx.fillStyle = '#8B4513'; // Brown
-        ctx.fillRect(-camera.x, canvas.height - ground.height, LEVEL_WIDTH, ground.height);
+        // Fallback ground
+        for (let row = 0; row < grid.length; row++) {
+          for (let col = 0; col < grid[row].length; col++) {
+            if (grid[row][col].includes('ground')) {
+              const cellX = col * gridSize - camera.x;
+              const cellY = row * gridSize;
+              
+              if (cellX > -gridSize && cellX < canvas.width && cellY > -gridSize && cellY < canvas.height) {
+                ctx.fillStyle = '#8B4513'; // Brown
+                ctx.fillRect(cellX, cellY, gridSize, ground.height);
+              }
+            }
+          }
+        }
       }
       
       try {
