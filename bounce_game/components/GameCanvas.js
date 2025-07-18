@@ -16,7 +16,7 @@ export default function GameCanvas() {
   
   // Constants for ground level
   const GROUND_HEIGHT = 40; // Height of the ground image
-  const GROUND_LEVEL = 580 - GROUND_HEIGHT; // Top of ground image
+  const GROUND_LEVEL = CANVAS_HEIGHT - GROUND_HEIGHT; // Top of ground image (at bottom of screen)
   
   // Game state
   const gameState = useRef({
@@ -37,7 +37,7 @@ export default function GameCanvas() {
     pointA: {
       x: 50,
       y: GROUND_LEVEL - 300, // Ground level - height
-      width: 300,
+      width: 240, // Reduced by 20% from 300
       height: 300,
       image: null,
       flipHorizontal: true // Flag to flip the image horizontally
@@ -355,34 +355,49 @@ export default function GameCanvas() {
         const dy = ball.y - enemy.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Chase ball if within detection radius
-        if (distance < enemy.detectionRadius) {
-          // Move towards ball
-          if (enemy.x < ball.x) {
-            enemy.velocityX += enemy.chaseSpeed * 0.05;
-          } else {
-            enemy.velocityX -= enemy.chaseSpeed * 0.05;
-          }
+        // Always move directly toward the player
+        if (distance < 800) { // Large detection radius so they always chase
+          // Calculate direction to player
+          const directionX = dx / distance;
+          
+          // Set velocity directly based on direction and chase speed
+          enemy.velocityX = directionX * enemy.chaseSpeed;
         } else {
-          // Random movement
-          if (Math.random() < 0.02) {
-            enemy.velocityX = Math.random() * 4 - 2; // Random velocity between -2 and 2
-          }
+          // Stand still if player is too far away
+          enemy.velocityX = 0;
         }
         
-        // Apply physics to enemy
-        enemy.velocityX *= 0.95; // Friction
+        // Apply enemy movement
         enemy.x += enemy.velocityX;
         
         // Keep enemy within level boundaries
         if (enemy.x - enemy.width / 2 < 0) {
           enemy.x = enemy.width / 2;
-          enemy.velocityX *= -1;
         }
         
         if (enemy.x + enemy.width / 2 > LEVEL_WIDTH) {
           enemy.x = LEVEL_WIDTH - enemy.width / 2;
-          enemy.velocityX *= -1;
+        }
+        
+        // Check collision with other enemies
+        for (const otherEnemy of enemies) {
+          if (enemy === otherEnemy || enemy.dead || otherEnemy.dead) continue;
+          
+          // Calculate distance between enemies
+          const enemyDx = enemy.x - otherEnemy.x;
+          const enemyDy = enemy.y - otherEnemy.y;
+          const enemyDistance = Math.sqrt(enemyDx * enemyDx + enemyDy * enemyDy);
+          
+          // Collision detected
+          const minDistance = enemy.width / 2 + otherEnemy.width / 2;
+          if (enemyDistance < minDistance) {
+            // Push enemies apart
+            const pushDirection = enemyDx / enemyDistance;
+            const pushAmount = (minDistance - enemyDistance) / 2;
+            
+            enemy.x += pushDirection * pushAmount;
+            otherEnemy.x -= pushDirection * pushAmount;
+          }
         }
       }
       
