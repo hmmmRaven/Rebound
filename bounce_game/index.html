@@ -158,6 +158,9 @@
       let imagesLoaded = 0;
       const totalImages = 5;
       
+      // Enemy types
+      const enemyTypes = ['enemy_1.png', 'dog_chase.png'];
+      
       function imageLoaded() {
         imagesLoaded++;
         if (imagesLoaded === totalImages) {
@@ -167,7 +170,9 @@
           
           // Load enemy images
           for (const enemy of gameState.enemies) {
-            enemy.image.src = 'public/images/enemy_1.png';
+            // Randomly select enemy type
+            const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+            enemy.image.src = 'public/images/' + randomType;
           }
           
           updateGameStatus();
