@@ -1,0 +1,23 @@
+.main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  min-height: 100vh;
+  background-color: #f0f0f0;
+}
+
+.title {
+  margin-bottom: 2rem;
+  font-size: 2rem;
+  color: #333;
+}
+
+.gameContainer {
+  width: 800px;
+  height: 600px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}

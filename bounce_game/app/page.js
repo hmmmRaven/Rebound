@@ -1,13 +1,16 @@
 'use client';
 
+import { useEffect } from 'react';
 import GameCanvas from '../components/GameCanvas';
+import styles from '../styles/Home.module.css';
 
-export default function HomePage() {
+export default function Home() {
   return (
-    <main style={{ textAlign: 'center', color: '#fff' }}>
-      <h1>Basketball Bounce</h1>
-      <p>Use ← → to move, SPACE to jump. Stomp the players, avoid spikes!</p>
-      <GameCanvas />
+    <main className={styles.main}>
+      <h1 className={styles.title}>Rebound Game</h1>
+      <div className={styles.gameContainer}>
+        <GameCanvas />
+      </div>
     </main>
   );
 }
