@@ -30,6 +30,7 @@
       border-radius: 8px;
       overflow: hidden;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      position: relative;
     }
     
     canvas {
@@ -45,15 +46,49 @@
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
+    
+    .game-status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: rgba(255, 255, 255, 0.7);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+    }
+    
+    .replay-button {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #2ecc71;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 18px;
+      cursor: pointer;
+      z-index: 20;
+      display: none;
+    }
+    
+    .replay-button:hover {
+      background-color: #27ae60;
+    }
   </style>
 </head>
 <body>
   <h1>Rebound Game</h1>
   <div class="game-container">
+    <div class="game-status" id="gameStatus">Score: 0</div>
+    <button class="replay-button" id="replayButton">Play Again</button>
     <canvas id="gameCanvas" width="800" height="600" tabindex="0"></canvas>
   </div>
   <div class="instructions">
     <p><strong>Controls:</strong> Use arrow keys to move and jump. Left/Right arrows to move, Up arrow or Space to jump.</p>
+    <p><strong>Goal:</strong> Get from point A (square) to point B (triangle). Stomp on enemies to defeat them and jump over obstacles.</p>
   </div>
 
   <script>
@@ -65,21 +100,47 @@
       canvas.focus();
       
       // Game state
+      const LEVEL_WIDTH = 4000; // 5x the canvas width
+      const CANVAS_WIDTH = 800;
+      const CANVAS_HEIGHT = 600;
+      
       const gameState = {
         ball: {
-          x: 400,
+          x: 100, // Starting position near point A
           y: 500,
           radius: 20,
           velocityX: 0,
           velocityY: 0,
           speed: 5,
-          jumpStrength: 15,
+          jumpStrength: 12,
           isJumping: false,
-          color: '#ff4757',
+          color: 'red'
         },
+        camera: {
+          x: 0,
+          y: 0
+        },
+        pointA: {
+          x: 50,
+          y: 580 - 40, // Ground level - height
+          width: 40,
+          height: 40,
+          color: 'green'
+        },
+        pointB: {
+          x: LEVEL_WIDTH - 100,
+          y: 580, // Ground level (same as where ball runs)
+          size: 40,
+          color: 'purple'
+        },
+        enemies: [],
+        obstacles: [],
+        score: 0,
         gravity: 0.8,
         friction: 0.8,
         ground: 580, // Canvas height - ball radius
+        gameOver: false,
+        gameWon: false,
         keys: {
           left: false,
           right: false,
@@ -104,9 +165,179 @@
         if (e.key === 'ArrowUp' || e.key === ' ') gameState.keys.up = false;
       });
       
-      // Check if ball is on ground
+      // Generate obstacles
+      function generateObstacles() {
+        const obstacles = [];
+        const obstacleCount = 10; // Reduced from 15 to 10
+        
+        // Divide the level into sections for better distribution
+        const sectionWidth = (LEVEL_WIDTH - 600) / obstacleCount;
+        
+        for (let i = 0; i < obstacleCount; i++) {
+          // Place each obstacle in its own section with some randomness
+          const sectionStart = 300 + (i * sectionWidth);
+          const x = sectionStart + (Math.random() * (sectionWidth * 0.6));
+          const width = 30 + Math.random() * 50; // Slightly smaller max width
+          const height = 40 + Math.random() * 60;
+          
+          // Check if this obstacle overlaps with existing obstacles
+          let validPosition = true;
+          for (const existingObstacle of obstacles) {
+            if (x < existingObstacle.x + existingObstacle.width + 100 && 
+                x + width > existingObstacle.x - 100) {
+              validPosition = false;
+              break;
+            }
+          }
+          
+          // If position is valid, add obstacle
+          if (validPosition) {
+            obstacles.push({
+              x: x,
+              y: CANVAS_HEIGHT - height,
+              width: width,
+              height: height,
+              color: '#e67e22'
+            });
+          } else {
+            i--; // Try again
+            if (i < -20) break; // Prevent infinite loops
+          }
+        }
+        
+        return obstacles;
+      }
+      
+      // Generate enemies
+      function generateEnemies() {
+        const enemies = [];
+        const numEnemies = 8;
+        
+        for (let i = 0; i < numEnemies; i++) {
+          // Create a new enemy
+          const newEnemy = {
+            x: Math.random() * (LEVEL_WIDTH - 400) + 400, // Avoid spawning at start
+            y: 580 - 15, // Ground level - radius
+            radius: 15,
+            velocityX: 0,
+            velocityY: 0,
+            speed: 1 + Math.random() * 1.5, // Random speed between 1-2.5
+            color: 'black',
+            alive: true // Make sure enemies are alive by default
+          };
+          
+          // Check if enemy overlaps with any obstacle
+          let validPosition = true;
+          
+          // Check against all obstacles with a larger safety margin
+          for (const obstacle of gameState.obstacles) {
+            if (
+              newEnemy.x + newEnemy.radius + 20 > obstacle.x &&
+              newEnemy.x - newEnemy.radius - 20 < obstacle.x + obstacle.width &&
+              newEnemy.y + newEnemy.radius + 5 > obstacle.y &&
+              newEnemy.y - newEnemy.radius - 5 < obstacle.y + obstacle.height
+            ) {
+              validPosition = false;
+              break;
+            }
+          }
+          
+          // Check if enemy overlaps with any existing enemy
+          for (const enemy of enemies) {
+            const dx = newEnemy.x - enemy.x;
+            const dy = newEnemy.y - enemy.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < newEnemy.radius + enemy.radius + 20) { // Increased margin
+              validPosition = false;
+              break;
+            }
+          }
+          
+          // If position is valid, add enemy, otherwise try again
+          if (validPosition) {
+            enemies.push(newEnemy);
+          } else {
+            i--; // Try again with a new position
+            if (i < -30) { // Prevent infinite loop if no valid positions can be found
+              break;
+            }
+          }
+        }
+        
+        return enemies;
+      }
+      
+      // Initialize game objects
+      gameState.obstacles = generateObstacles();
+      // Generate enemies after obstacles to ensure proper collision checking
+      gameState.enemies = generateEnemies();
+      
+      // Update game status display
+      function updateGameStatus() {
+        const statusElement = document.getElementById('gameStatus');
+        const replayButton = document.getElementById('replayButton');
+        
+        statusElement.textContent = `Score: ${gameState.score}`;
+        
+        if (gameState.gameWon) {
+          statusElement.textContent += ' - You Win!';
+          replayButton.style.display = 'block';
+        } else if (gameState.gameOver) {
+          statusElement.textContent += ' - Game Over!';
+          replayButton.style.display = 'block';
+        } else {
+          replayButton.style.display = 'none';
+        }
+      }
+      
+      // Check if ball is on ground or platform
       function isOnGround() {
-        return gameState.ball.y >= gameState.ground - gameState.ball.radius;
+        // Check if on ground
+        if (gameState.ball.y >= gameState.ground - gameState.ball.radius) {
+          return true;
+        }
+        
+        // Check if on any obstacle
+        for (const obstacle of gameState.obstacles) {
+          if (
+            gameState.ball.x + gameState.ball.radius > obstacle.x &&
+            gameState.ball.x - gameState.ball.radius < obstacle.x + obstacle.width &&
+            Math.abs(gameState.ball.y + gameState.ball.radius - obstacle.y) < 2 &&
+            gameState.ball.velocityY >= 0
+          ) {
+            return true;
+          }
+        }
+        
+        return false;
+      }
+      
+      // Check collision between ball and enemy
+      function checkEnemyCollision(ball, enemy) {
+        if (!enemy.alive) return false;
+        
+        const dx = ball.x - enemy.x;
+        const dy = ball.y - enemy.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        return distance < ball.radius + enemy.radius;
+      }
+      
+      // Check if ball is stomping on enemy (coming from above)
+      function isStompingEnemy(ball, enemy) {
+        return ball.velocityY > 0 && 
+               ball.y < enemy.y - enemy.radius + 10 &&
+               Math.abs(ball.x - enemy.x) < enemy.radius;
+      }
+      
+      // Check collision between ball and obstacle
+      function checkObstacleCollision(ball, obstacle) {
+        // Check if ball is colliding with obstacle
+        return ball.x + ball.radius > obstacle.x &&
+               ball.x - ball.radius < obstacle.x + obstacle.width &&
+               ball.y + ball.radius > obstacle.y &&
+               ball.y - ball.radius < obstacle.y + obstacle.height;
       }
       
       // Game loop
@@ -114,7 +345,14 @@
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        const { ball, platforms, gravity, friction, keys } = gameState;
+        const { ball, gravity, friction, keys, camera, pointA, pointB, enemies, obstacles } = gameState;
+        
+        if (gameState.gameOver || gameState.gameWon) {
+          // If game is over, just render the scene but don't update physics
+          renderScene();
+          requestAnimationFrame(gameLoop);
+          return;
+        }
         
         // Update ball position based on keyboard input
         if (keys.left) ball.velocityX -= ball.speed * 0.1;
@@ -140,8 +378,8 @@
           ball.velocityX = 0;
         }
         
-        if (ball.x + ball.radius > canvas.width) {
-          ball.x = canvas.width - ball.radius;
+        if (ball.x + ball.radius > LEVEL_WIDTH) {
+          ball.x = LEVEL_WIDTH - ball.radius;
           ball.velocityX = 0;
         }
         
@@ -152,30 +390,230 @@
           ball.isJumping = false;
         }
         
-        // No platform collisions to check
+        // Update camera to follow the ball
+        camera.x = Math.max(0, Math.min(LEVEL_WIDTH - CANVAS_WIDTH, ball.x - CANVAS_WIDTH / 2));
         
-        // No platforms to draw
+        // Check if ball reached point B (goal)
+        // Check if ball is within the triangle area
+        const triangleX = pointB.x;
+        const triangleY = pointB.y;
+        const triangleWidth = pointB.size;
+        const triangleHeight = pointB.size;
         
-        // Draw ball
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fillStyle = ball.color;
-        ctx.fill();
-        ctx.closePath();
+        if (ball.x + ball.radius > triangleX && 
+            ball.x - ball.radius < triangleX + triangleWidth && 
+            ball.y + ball.radius > triangleY - triangleHeight && 
+            ball.y - ball.radius < triangleY) {
+          gameState.gameWon = true;
+          gameState.score += 100;
+          updateGameStatus();
+        }
         
-        // Draw ground
-        ctx.fillStyle = '#2f3542';
-        ctx.fillRect(0, gameState.ground + ball.radius, canvas.width, 5);
+        // Check enemy collisions
+        for (let i = 0; i < enemies.length; i++) {
+          const enemy = enemies[i];
+          
+          if (!enemy.alive) continue;
+          
+          // Move enemy towards player if within range
+          if (Math.abs(enemy.x - ball.x) < 300) {
+            if (enemy.x < ball.x) {
+              enemy.velocityX = enemy.speed;
+            } else {
+              enemy.velocityX = -enemy.speed;
+            }
+            
+            // Store previous position for collision detection
+            const prevX = enemy.x;
+            enemy.x += enemy.velocityX;
+            
+            // Check collision with obstacles
+            for (const obstacle of obstacles) {
+              if (
+                enemy.x + enemy.radius > obstacle.x &&
+                enemy.x - enemy.radius < obstacle.x + obstacle.width &&
+                enemy.y + enemy.radius > obstacle.y &&
+                enemy.y - enemy.radius < obstacle.y + obstacle.height
+              ) {
+                // Revert position and reverse direction
+                enemy.x = prevX;
+                enemy.velocityX = -enemy.velocityX;
+                break;
+              }
+            }
+            
+            // Check collision with point A (starting square)
+            if (
+              enemy.x + enemy.radius > pointA.x &&
+              enemy.x - enemy.radius < pointA.x + pointA.width &&
+              enemy.y + enemy.radius > pointA.y &&
+              enemy.y - enemy.radius < pointA.y + pointA.height
+            ) {
+              enemy.x = prevX;
+              enemy.velocityX = -enemy.velocityX;
+            }
+            
+            // Check collision with other enemies
+            for (const otherEnemy of enemies) {
+              if (enemy !== otherEnemy) { // Don't check against self
+                const dx = enemy.x - otherEnemy.x;
+                const dy = enemy.y - otherEnemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < enemy.radius + otherEnemy.radius) {
+                  // Collision detected, revert position
+                  enemy.x = prevX;
+                  
+                  // Simple bounce effect
+                  enemy.velocityX = -enemy.velocityX;
+                  break;
+                }
+              }
+            }
+            
+            // Check level boundaries
+            if (enemy.x - enemy.radius < 0 || enemy.x + enemy.radius > LEVEL_WIDTH) {
+              enemy.x = prevX;
+              enemy.velocityX = -enemy.velocityX;
+            }
+          }
+          
+          // Check collision
+          if (checkEnemyCollision(ball, enemy)) {
+            if (isStompingEnemy(ball, enemy)) {
+              // Player stomped on enemy
+              enemy.alive = false;
+              ball.velocityY = -ball.jumpStrength * 0.7; // Bounce after stomping
+              gameState.score += 10;
+              updateGameStatus();
+            } else {
+              // Enemy hit player
+              gameState.gameOver = true;
+              updateGameStatus();
+            }
+          }
+        }
+        
+        // Check obstacle collisions
+        for (let i = 0; i < obstacles.length; i++) {
+          const obstacle = obstacles[i];
+          
+          if (checkObstacleCollision(ball, obstacle)) {
+            // Handle collision based on direction
+            const ballBottom = ball.y + ball.radius;
+            const ballTop = ball.y - ball.radius;
+            const ballRight = ball.x + ball.radius;
+            const ballLeft = ball.x - ball.radius;
+            
+            const obstacleBottom = obstacle.y + obstacle.height;
+            const obstacleTop = obstacle.y;
+            const obstacleRight = obstacle.x + obstacle.width;
+            const obstacleLeft = obstacle.x;
+            
+            // Coming from above
+            if (ballBottom >= obstacleTop && ballTop < obstacleTop && ball.velocityY > 0) {
+              ball.y = obstacleTop - ball.radius;
+              ball.velocityY = 0;
+              ball.isJumping = false;
+              // Note: We don't need to modify this part as isOnGround() now checks for obstacles
+            }
+            // Coming from below
+            else if (ballTop <= obstacleBottom && ballBottom > obstacleBottom && ball.velocityY < 0) {
+              ball.y = obstacleBottom + ball.radius;
+              ball.velocityY = 0;
+            }
+            // Coming from left
+            else if (ballRight >= obstacleLeft && ballLeft < obstacleLeft) {
+              ball.x = obstacleLeft - ball.radius;
+              ball.velocityX = 0;
+            }
+            // Coming from right
+            else if (ballLeft <= obstacleRight && ballRight > obstacleRight) {
+              ball.x = obstacleRight + ball.radius;
+              ball.velocityX = 0;
+            }
+          }
+        }
+        
+        renderScene();
         
         // Continue animation
         requestAnimationFrame(gameLoop);
       }
       
+      function renderScene() {
+        const { ball, camera, pointA, pointB, enemies, obstacles } = gameState;
+        
+        // Draw ground
+        ctx.fillStyle = '#2f3542';
+        ctx.fillRect(-camera.x, gameState.ground + ball.radius, LEVEL_WIDTH, 5);
+        
+        // Draw point A (square)
+        ctx.fillStyle = pointA.color;
+        ctx.fillRect(pointA.x - camera.x, pointA.y, pointA.width, pointA.height);
+        
+        // Draw point B (triangle - upright)
+        ctx.fillStyle = pointB.color;
+        ctx.beginPath();
+        ctx.moveTo(pointB.x - camera.x, pointB.y); // Bottom left
+        ctx.lineTo(pointB.x + pointB.size - camera.x, pointB.y); // Bottom right
+        ctx.lineTo(pointB.x + pointB.size/2 - camera.x, pointB.y - pointB.size); // Top center
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw obstacles
+        obstacles.forEach(obstacle => {
+          ctx.fillStyle = obstacle.color;
+          ctx.fillRect(obstacle.x - camera.x, obstacle.y, obstacle.width, obstacle.height);
+        });
+        
+        // Draw enemies
+        enemies.forEach(enemy => {
+          if (enemy.alive) {
+            ctx.beginPath();
+            ctx.arc(enemy.x - camera.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+            ctx.fillStyle = enemy.color;
+            ctx.fill();
+            ctx.closePath();
+          }
+        });
+        
+        // Draw ball (player)
+        ctx.beginPath();
+        ctx.arc(ball.x - camera.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = ball.color;
+        ctx.fill();
+        ctx.closePath();
+      }
+      
       // Start the game
+      updateGameStatus();
       gameLoop();
       
       // Make sure canvas has focus for keyboard input
       canvas.addEventListener('click', () => {
+        canvas.focus();
+      });
+      
+      // Replay button functionality
+      document.getElementById('replayButton').addEventListener('click', () => {
+        // Reset game state
+        gameState.ball.x = 100;
+        gameState.ball.y = 500;
+        gameState.ball.velocityX = 0;
+        gameState.ball.velocityY = 0;
+        gameState.camera.x = 0;
+        gameState.score = 0;
+        gameState.gameOver = false;
+        gameState.gameWon = false;
+        
+        // Regenerate enemies and obstacles
+        gameState.enemies = generateEnemies();
+        gameState.obstacles = generateObstacles();
+        
+        updateGameStatus();
+        
+        // Focus back on canvas
         canvas.focus();
       });
     });
