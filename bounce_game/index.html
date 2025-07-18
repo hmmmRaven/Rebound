@@ -106,39 +106,45 @@
       
       const gameState = {
         ball: {
-          x: 100, // Starting position near point A
-          y: 500,
+          x: 100,
+          y: 580 - 20, // Ground level - radius
           radius: 20,
           velocityX: 0,
           velocityY: 0,
-          speed: 5,
-          jumpStrength: 12,
-          isJumping: false,
-          color: 'red'
+          speed: 5, // Added missing speed property
+          jumpStrength: 15, // Increased jump strength from 12 to 15
+          onGround: true,
+          image: new Image()
         },
         camera: {
           x: 0,
-          y: 0
         },
         pointA: {
           x: 50,
-          y: 580 - 40, // Ground level - height
-          width: 40,
-          height: 40,
-          color: 'green'
+          y: 580 - 300, // Ground level - height (10x bigger)
+          width: 300, // 10x bigger
+          height: 300, // 10x bigger
+          image: new Image(),
+          flipHorizontal: true // Flag to flip the image horizontally
         },
         pointB: {
-          x: LEVEL_WIDTH - 100,
-          y: 580, // Ground level (same as where ball runs)
-          size: 40,
-          color: 'purple'
+          x: LEVEL_WIDTH - 400, // Adjusted for larger size
+          y: 580, // Ground level
+          size: 800, // 20x bigger (40 * 20)
+          image: new Image()
+        },
+        background: {
+          image: new Image()
+        },
+        ground: {
+          image: new Image(),
+          height: 40 // Height of the ground image
         },
         enemies: [],
         obstacles: [],
         score: 0,
         gravity: 0.8,
         friction: 0.8,
-        ground: 580, // Canvas height - ball radius
         gameOver: false,
         gameWon: false,
         keys: {
@@ -147,6 +153,39 @@
           up: false,
         }
       };
+      
+      // Load images and track loading status
+      let imagesLoaded = 0;
+      const totalImages = 5;
+      
+      function imageLoaded() {
+        imagesLoaded++;
+        if (imagesLoaded === totalImages) {
+          // All images loaded, start the game
+          // Generate enemies after all images are loaded
+          gameState.enemies = generateEnemies();
+          
+          // Load enemy images
+          for (const enemy of gameState.enemies) {
+            enemy.image.src = 'public/images/enemy_1.png';
+          }
+          
+          updateGameStatus();
+          gameLoop();
+        }
+      }
+      
+      gameState.ball.image.onload = imageLoaded;
+      gameState.pointA.image.onload = imageLoaded;
+      gameState.pointB.image.onload = imageLoaded;
+      gameState.background.image.onload = imageLoaded;
+      gameState.ground.image.onload = imageLoaded;
+      
+      gameState.ball.image.src = 'public/images/basketball.png';
+      gameState.pointA.image.src = 'public/images/background_court.png';
+      gameState.pointB.image.src = 'public/images/pyramid.png'; // Fixed capitalization
+      gameState.background.image.src = 'public/images/background_city.jpg';
+      gameState.ground.image.src = 'public/images/ground_city.png';
       
       // Handle keyboard input
       window.addEventListener('keydown', (e) => {
@@ -216,42 +255,52 @@
         for (let i = 0; i < numEnemies; i++) {
           // Create a new enemy
           const newEnemy = {
-            x: Math.random() * (LEVEL_WIDTH - 400) + 400, // Avoid spawning at start
-            y: 580 - 15, // Ground level - radius
-            radius: 15,
+            // Avoid spawning at start or near the pyramid (point B)
+            x: Math.random() * (LEVEL_WIDTH - 1200) + 400,
+            y: 580 - 45, // Ground level - radius (3x bigger)
+            radius: 45, // 3x bigger (15 * 3)
             velocityX: 0,
             velocityY: 0,
             speed: 1 + Math.random() * 1.5, // Random speed between 1-2.5
-            color: 'black',
+            image: new Image(),
             alive: true // Make sure enemies are alive by default
           };
           
           // Check if enemy overlaps with any obstacle
           let validPosition = true;
           
-          // Check against all obstacles with a larger safety margin
+          // Check against all obstacles with an even larger safety margin for bigger enemies
           for (const obstacle of gameState.obstacles) {
             if (
-              newEnemy.x + newEnemy.radius + 20 > obstacle.x &&
-              newEnemy.x - newEnemy.radius - 20 < obstacle.x + obstacle.width &&
-              newEnemy.y + newEnemy.radius + 5 > obstacle.y &&
-              newEnemy.y - newEnemy.radius - 5 < obstacle.y + obstacle.height
+              newEnemy.x + newEnemy.radius + 100 > obstacle.x &&
+              newEnemy.x - newEnemy.radius - 100 < obstacle.x + obstacle.width &&
+              newEnemy.y + newEnemy.radius + 50 > obstacle.y &&
+              newEnemy.y - newEnemy.radius - 50 < obstacle.y + obstacle.height
             ) {
               validPosition = false;
               break;
             }
           }
           
-          // Check if enemy overlaps with any existing enemy
+          // Check if enemy overlaps with any existing enemy - increased margin for bigger enemies
           for (const enemy of enemies) {
             const dx = newEnemy.x - enemy.x;
             const dy = newEnemy.y - enemy.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            if (distance < newEnemy.radius + enemy.radius + 20) { // Increased margin
+            if (distance < newEnemy.radius + enemy.radius + 90) { // Further increased margin for bigger enemies
               validPosition = false;
               break;
             }
+          }
+          
+          // Check if enemy is near the pyramid (point B)
+          const pyramidX = gameState.pointB.x;
+          const pyramidWidth = gameState.pointB.size;
+          if (newEnemy.x + newEnemy.radius + 100 > pyramidX && 
+              newEnemy.x - newEnemy.radius - 100 < pyramidX + pyramidWidth) {
+            validPosition = false;
+            break; // Changed from continue to break to avoid infinite loop
           }
           
           // If position is valid, add enemy, otherwise try again
@@ -270,8 +319,6 @@
       
       // Initialize game objects
       gameState.obstacles = generateObstacles();
-      // Generate enemies after obstacles to ensure proper collision checking
-      gameState.enemies = generateEnemies();
       
       // Update game status display
       function updateGameStatus() {
@@ -294,7 +341,7 @@
       // Check if ball is on ground or platform
       function isOnGround() {
         // Check if on ground
-        if (gameState.ball.y >= gameState.ground - gameState.ball.radius) {
+        if (gameState.ball.y >= 580 - gameState.ball.radius) {
           return true;
         }
         
@@ -314,21 +361,31 @@
       }
       
       // Check collision between ball and enemy
-      function checkEnemyCollision(ball, enemy) {
-        if (!enemy.alive) return false;
+      function checkEnemyCollision() {
+        const { ball, enemies } = gameState;
         
-        const dx = ball.x - enemy.x;
-        const dy = ball.y - enemy.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        return distance < ball.radius + enemy.radius;
-      }
-      
-      // Check if ball is stomping on enemy (coming from above)
-      function isStompingEnemy(ball, enemy) {
-        return ball.velocityY > 0 && 
-               ball.y < enemy.y - enemy.radius + 10 &&
-               Math.abs(ball.x - enemy.x) < enemy.radius;
+        for (const enemy of enemies) {
+          if (!enemy.alive) continue;
+          
+          const dx = ball.x - enemy.x;
+          const dy = ball.y - enemy.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < ball.radius + enemy.radius) {
+            // Check if ball is above enemy (stomping)
+            if (ball.y < enemy.y - enemy.radius / 2 && ball.velocityY > 0) {
+              // Bounce off enemy
+              ball.velocityY = -ball.velocityY * 0.8;
+              enemy.alive = false;
+              gameState.score += 10;
+              updateGameStatus();
+            } else {
+              // Game over if hit from side
+              gameState.gameOver = true;
+              updateGameStatus();
+            }
+          }
+        }
       }
       
       // Check collision between ball and obstacle
@@ -361,7 +418,7 @@
         // Apply jump if on ground and up key is pressed
         if (keys.up && isOnGround()) {
           ball.velocityY = -ball.jumpStrength;
-          ball.isJumping = true;
+          ball.onGround = false;
         }
         
         // Apply physics
@@ -384,30 +441,35 @@
         }
         
         // Check ground collision
-        if (ball.y + ball.radius > gameState.ground) {
-          ball.y = gameState.ground - ball.radius;
+        if (ball.y + ball.radius > 580) {
+          ball.y = 580 - ball.radius;
           ball.velocityY = 0;
-          ball.isJumping = false;
+          ball.onGround = true;
         }
         
         // Update camera to follow the ball
         camera.x = Math.max(0, Math.min(LEVEL_WIDTH - CANVAS_WIDTH, ball.x - CANVAS_WIDTH / 2));
         
         // Check if ball reached point B (goal)
-        // Check if ball is within the triangle area
-        const triangleX = pointB.x;
-        const triangleY = pointB.y;
-        const triangleWidth = pointB.size;
-        const triangleHeight = pointB.size;
-        
-        if (ball.x + ball.radius > triangleX && 
-            ball.x - ball.radius < triangleX + triangleWidth && 
-            ball.y + ball.radius > triangleY - triangleHeight && 
-            ball.y - ball.radius < triangleY) {
-          gameState.gameWon = true;
-          gameState.score += 100;
-          updateGameStatus();
+        function checkGoal() {
+          const { ball, pointB } = gameState;
+          
+          // Check if ball is within the pyramid area (now 20x bigger)
+          const pyramidX = pointB.x;
+          const pyramidY = pointB.y;
+          const pyramidWidth = pointB.size;
+          const pyramidHeight = pointB.size;
+          
+          if (ball.x + ball.radius > pyramidX && 
+              ball.x - ball.radius < pyramidX + pyramidWidth && 
+              ball.y + ball.radius > pyramidY - pyramidHeight && 
+              ball.y - ball.radius < pyramidY) {
+            gameState.gameWon = true;
+            gameState.score += 100;
+            updateGameStatus();
+          }
         }
+        checkGoal();
         
         // Check enemy collisions
         for (let i = 0; i < enemies.length; i++) {
@@ -477,22 +539,10 @@
               enemy.velocityX = -enemy.velocityX;
             }
           }
-          
-          // Check collision
-          if (checkEnemyCollision(ball, enemy)) {
-            if (isStompingEnemy(ball, enemy)) {
-              // Player stomped on enemy
-              enemy.alive = false;
-              ball.velocityY = -ball.jumpStrength * 0.7; // Bounce after stomping
-              gameState.score += 10;
-              updateGameStatus();
-            } else {
-              // Enemy hit player
-              gameState.gameOver = true;
-              updateGameStatus();
-            }
-          }
         }
+        
+        // Check enemy collisions
+        checkEnemyCollision();
         
         // Check obstacle collisions
         for (let i = 0; i < obstacles.length; i++) {
@@ -514,7 +564,7 @@
             if (ballBottom >= obstacleTop && ballTop < obstacleTop && ball.velocityY > 0) {
               ball.y = obstacleTop - ball.radius;
               ball.velocityY = 0;
-              ball.isJumping = false;
+              ball.onGround = true; // Fixed: use onGround instead of isJumping
               // Note: We don't need to modify this part as isOnGround() now checks for obstacles
             }
             // Coming from below
@@ -541,54 +591,58 @@
         requestAnimationFrame(gameLoop);
       }
       
+      // Render the game scene
       function renderScene() {
-        const { ball, camera, pointA, pointB, enemies, obstacles } = gameState;
+        const { camera, enemies, obstacles } = gameState;
         
-        // Draw ground
-        ctx.fillStyle = '#2f3542';
-        ctx.fillRect(-camera.x, gameState.ground + ball.radius, LEVEL_WIDTH, 5);
+        // Draw background
+        ctx.drawImage(gameState.background.image, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        // Draw point A (square)
-        ctx.fillStyle = pointA.color;
-        ctx.fillRect(pointA.x - camera.x, pointA.y, pointA.width, pointA.height);
-        
-        // Draw point B (triangle - upright)
-        ctx.fillStyle = pointB.color;
-        ctx.beginPath();
-        ctx.moveTo(pointB.x - camera.x, pointB.y); // Bottom left
-        ctx.lineTo(pointB.x + pointB.size - camera.x, pointB.y); // Bottom right
-        ctx.lineTo(pointB.x + pointB.size/2 - camera.x, pointB.y - pointB.size); // Top center
-        ctx.closePath();
-        ctx.fill();
+        // Draw ground using ground_city.png image
+        // Repeat the ground image across the entire level width
+        const groundImg = gameState.ground.image;
+        const groundHeight = gameState.ground.height;
+        for (let x = 0; x < LEVEL_WIDTH; x += groundImg.width) {
+          ctx.drawImage(groundImg, x - camera.x, 580, groundImg.width, groundHeight);
+        }
         
         // Draw obstacles
-        obstacles.forEach(obstacle => {
+        for (const obstacle of obstacles) {
           ctx.fillStyle = obstacle.color;
           ctx.fillRect(obstacle.x - camera.x, obstacle.y, obstacle.width, obstacle.height);
-        });
+        }
+        
+        // Draw point A (square with image)
+        if (gameState.pointA.flipHorizontal) {
+          // Save the current context state
+          ctx.save();
+          // Translate to the position where we want to draw the image
+          ctx.translate(gameState.pointA.x - camera.x + gameState.pointA.width, gameState.pointA.y);
+          // Scale by -1 in the x-direction to flip horizontally
+          ctx.scale(-1, 1);
+          // Draw the image at the origin (0,0) with the desired dimensions
+          ctx.drawImage(gameState.pointA.image, 0, 0, gameState.pointA.width, gameState.pointA.height);
+          // Restore the context to its original state
+          ctx.restore();
+        } else {
+          ctx.drawImage(gameState.pointA.image, gameState.pointA.x - camera.x, gameState.pointA.y, gameState.pointA.width, gameState.pointA.height);
+        }
+        
+        // Draw point B (pyramid image) - adjusted to touch the ground
+        ctx.drawImage(gameState.pointB.image, gameState.pointB.x - camera.x, gameState.pointB.y - gameState.pointB.size, gameState.pointB.size, gameState.pointB.size);
+        
+        // Draw ball (basketball image)
+        ctx.drawImage(gameState.ball.image, gameState.ball.x - camera.x - gameState.ball.radius, gameState.ball.y - gameState.ball.radius, gameState.ball.radius * 2, gameState.ball.radius * 2);
         
         // Draw enemies
-        enemies.forEach(enemy => {
+        for (const enemy of enemies) {
           if (enemy.alive) {
-            ctx.beginPath();
-            ctx.arc(enemy.x - camera.x, enemy.y, enemy.radius, 0, Math.PI * 2);
-            ctx.fillStyle = enemy.color;
-            ctx.fill();
-            ctx.closePath();
+            ctx.drawImage(enemy.image, enemy.x - camera.x - enemy.radius, enemy.y - enemy.radius, enemy.radius * 2, enemy.radius * 2);
           }
-        });
-        
-        // Draw ball (player)
-        ctx.beginPath();
-        ctx.arc(ball.x - camera.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fillStyle = ball.color;
-        ctx.fill();
-        ctx.closePath();
+        }
       }
       
-      // Start the game
-      updateGameStatus();
-      gameLoop();
+      // Game will start after all images are loaded via the imageLoaded function
       
       // Make sure canvas has focus for keyboard input
       canvas.addEventListener('click', () => {
@@ -599,7 +653,7 @@
       document.getElementById('replayButton').addEventListener('click', () => {
         // Reset game state
         gameState.ball.x = 100;
-        gameState.ball.y = 500;
+        gameState.ball.y = 580 - 20; // Ground level - radius
         gameState.ball.velocityX = 0;
         gameState.ball.velocityY = 0;
         gameState.camera.x = 0;
