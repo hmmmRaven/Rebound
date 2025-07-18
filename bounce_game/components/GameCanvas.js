@@ -355,16 +355,16 @@ export default function GameCanvas() {
         const dy = ball.y - enemy.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Always move at constant speed
-        if (distance < 800) { // Large detection radius so they always chase
-          // Calculate direction to player (normalized vector)
-          const directionX = dx / distance;
-          
-          // Set a fixed velocity that never changes
-          // Using a constant value ensures they always move at exactly the same speed
-          enemy.velocityX = directionX > 0 ? enemy.chaseSpeed : -enemy.chaseSpeed;
+        // Only move if player is in front of the enemy (not behind)
+        if (distance < 800 && dx > 0) { // Only chase if player is to the right of enemy
+          // Move right at constant speed
+          enemy.velocityX = enemy.chaseSpeed;
+        } else if (distance < 800 && dx < 0 && enemy.x > ball.x + 100) { 
+          // Only chase left if player is significantly to the left (prevent immediate turning)
+          // This creates a "zone of no return" - once player passes enemy by enough distance, enemy stops following
+          enemy.velocityX = -enemy.chaseSpeed;
         } else {
-          // Stand still if player is too far away
+          // Stand still if player is too far away or has passed the enemy
           enemy.velocityX = 0;
         }
         
