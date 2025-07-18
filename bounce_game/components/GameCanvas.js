@@ -361,11 +361,13 @@ export default function GameCanvas() {
         // Apply enemy movement
         enemy.x += enemy.velocityX;
         
-        // Keep enemy within level boundaries
-        if (enemy.x - enemy.width / 2 < 0) {
-          enemy.x = enemy.width / 2;
+        // Mark enemy for removal if it goes off screen to the left
+        if (enemy.x + enemy.width < camera.x - 100) { // Give some buffer off-screen
+          enemy.dead = true; // Mark as dead so it won't be rendered or updated
+          continue; // Skip the rest of the loop for this enemy
         }
         
+        // Only prevent going off the right edge of the level
         if (enemy.x + enemy.width / 2 > LEVEL_WIDTH) {
           enemy.x = LEVEL_WIDTH - enemy.width / 2;
         }
