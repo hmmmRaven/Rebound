@@ -77,11 +77,6 @@
           isJumping: false,
           color: '#ff4757',
         },
-        platforms: [
-          { x: 100, y: 550, width: 200, height: 20 },
-          { x: 400, y: 450, width: 200, height: 20 },
-          { x: 700, y: 350, width: 200, height: 20 },
-        ],
         gravity: 0.8,
         friction: 0.8,
         ground: 580, // Canvas height - ball radius
@@ -109,22 +104,9 @@
         if (e.key === 'ArrowUp' || e.key === ' ') gameState.keys.up = false;
       });
       
-      // Check if ball is on a platform
-      function isOnPlatform() {
-        const { ball, platforms } = gameState;
-        
-        for (const platform of platforms) {
-          if (
-            ball.x + ball.radius > platform.x &&
-            ball.x - ball.radius < platform.x + platform.width &&
-            ball.y + ball.radius >= platform.y - 1 &&
-            ball.y + ball.radius <= platform.y + 5
-          ) {
-            return true;
-          }
-        }
-        
-        return ball.y >= gameState.ground;
+      // Check if ball is on ground
+      function isOnGround() {
+        return gameState.ball.y >= gameState.ground - gameState.ball.radius;
       }
       
       // Game loop
@@ -138,8 +120,8 @@
         if (keys.left) ball.velocityX -= ball.speed * 0.1;
         if (keys.right) ball.velocityX += ball.speed * 0.1;
         
-        // Apply jump if on ground or platform and up key is pressed
-        if (keys.up && isOnPlatform()) {
+        // Apply jump if on ground and up key is pressed
+        if (keys.up && isOnGround()) {
           ball.velocityY = -ball.jumpStrength;
           ball.isJumping = true;
         }
@@ -170,26 +152,9 @@
           ball.isJumping = false;
         }
         
-        // Check platform collisions
-        for (const platform of platforms) {
-          if (
-            ball.x + ball.radius > platform.x &&
-            ball.x - ball.radius < platform.x + platform.width &&
-            ball.y + ball.radius >= platform.y - 1 &&
-            ball.y + ball.radius <= platform.y + 5 &&
-            ball.velocityY > 0
-          ) {
-            ball.y = platform.y - ball.radius;
-            ball.velocityY = 0;
-            ball.isJumping = false;
-          }
-        }
+        // No platform collisions to check
         
-        // Draw platforms
-        ctx.fillStyle = '#3742fa';
-        platforms.forEach(platform => {
-          ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-        });
+        // No platforms to draw
         
         // Draw ball
         ctx.beginPath();
