@@ -22,6 +22,9 @@ export default function GameCanvas() {
   // Get level data
   const currentLevel = getLevel(0); // Start with the first level
   
+  // Add basketball hoop image reference
+  const [basketballHoop, setBasketballHoop] = useState(null);
+  
   // Enemy types
   const enemyTypes = ['Enemy_1.png', 'dog_chase.png'];
   
@@ -95,6 +98,13 @@ export default function GameCanvas() {
       imageRefs.current.ground.src = '/images/ground_city.png';
       imageRefs.current.ground.onload = () => {
         gameState.current.groundImage = imageRefs.current.ground;
+      };
+      
+      // Load basketball hoop image
+      const hoopImage = new Image();
+      hoopImage.src = '/images/basketball_hoop.png';
+      hoopImage.onload = () => {
+        setBasketballHoop(hoopImage);
       };
       
       // Preload enemy images
@@ -502,7 +512,8 @@ export default function GameCanvas() {
       
       // Draw platforms
       platforms.forEach(platform => {
-        ctx.fillStyle = platform.color || '#3742fa';
+        // Use transparent blue platforms to match the HTML version
+        ctx.fillStyle = platform.color || 'rgba(0, 0, 255, 0.7)';
         ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
       });
       
@@ -594,28 +605,30 @@ export default function GameCanvas() {
         ctx.closePath();
       }
       
-      // Draw UI
-      ctx.fillStyle = '#2f3542';
-      ctx.fillRect(10, 10, 200, 60);
-      
-      // Draw health bar
-      ctx.fillStyle = '#ff4757';
-      ctx.fillRect(20, 20, 180 * (health / 100), 15);
-      ctx.strokeStyle = '#ffffff';
-      ctx.strokeRect(20, 20, 180, 15);
-      
-      // Draw score
-      ctx.fillStyle = '#ffffff';
+      // Draw UI - simple score display like in HTML version
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
       ctx.font = '16px Arial';
       ctx.textAlign = 'left';
-      ctx.fillText(`Score: ${score}`, 20, 55);
       
-      // Draw active power-ups
-      powerUps.forEach((powerUp, index) => {
-        const timeLeft = Math.ceil((powerUp.duration - (gameState.current.gameTime - powerUp.startTime) * (1000/60)) / 1000);
-        ctx.fillStyle = '#2ed573';
-        ctx.fillText(`${powerUp.type}: ${timeLeft}s`, 120, 55);
-      });
+      // Create a small rounded rectangle for score
+      const scoreText = `Score: ${score}`;
+      const scoreWidth = ctx.measureText(scoreText).width + 20;
+      const scoreHeight = 30;
+      const scoreX = 10;
+      const scoreY = 10;
+      
+      // Draw score background
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.roundRect(scoreX, scoreY, scoreWidth, scoreHeight, 5);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Draw score text
+      ctx.fillStyle = '#333';
+      ctx.fillText(scoreText, scoreX + 10, scoreY + 20);
 
       // Continue animation
       animationFrameId = window.requestAnimationFrame(render);
