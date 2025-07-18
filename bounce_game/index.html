@@ -204,47 +204,10 @@
         if (e.key === 'ArrowUp' || e.key === ' ') gameState.keys.up = false;
       });
       
-      // Generate obstacles
+      // Generate obstacles - empty function as obstacles are removed
       function generateObstacles() {
-        const obstacles = [];
-        const obstacleCount = 10; // Reduced from 15 to 10
-        
-        // Divide the level into sections for better distribution
-        const sectionWidth = (LEVEL_WIDTH - 600) / obstacleCount;
-        
-        for (let i = 0; i < obstacleCount; i++) {
-          // Place each obstacle in its own section with some randomness
-          const sectionStart = 300 + (i * sectionWidth);
-          const x = sectionStart + (Math.random() * (sectionWidth * 0.6));
-          const width = 30 + Math.random() * 50; // Slightly smaller max width
-          const height = 40 + Math.random() * 60;
-          
-          // Check if this obstacle overlaps with existing obstacles
-          let validPosition = true;
-          for (const existingObstacle of obstacles) {
-            if (x < existingObstacle.x + existingObstacle.width + 100 && 
-                x + width > existingObstacle.x - 100) {
-              validPosition = false;
-              break;
-            }
-          }
-          
-          // If position is valid, add obstacle
-          if (validPosition) {
-            obstacles.push({
-              x: x,
-              y: CANVAS_HEIGHT - height,
-              width: width,
-              height: height,
-              color: '#e67e22'
-            });
-          } else {
-            i--; // Try again
-            if (i < -20) break; // Prevent infinite loops
-          }
-        }
-        
-        return obstacles;
+        // Return empty array - no obstacles
+        return [];
       }
       
       // Generate enemies
@@ -269,18 +232,8 @@
           // Check if enemy overlaps with any obstacle
           let validPosition = true;
           
-          // Check against all obstacles with an even larger safety margin for bigger enemies
-          for (const obstacle of gameState.obstacles) {
-            if (
-              newEnemy.x + newEnemy.radius + 100 > obstacle.x &&
-              newEnemy.x - newEnemy.radius - 100 < obstacle.x + obstacle.width &&
-              newEnemy.y + newEnemy.radius + 50 > obstacle.y &&
-              newEnemy.y - newEnemy.radius - 50 < obstacle.y + obstacle.height
-            ) {
-              validPosition = false;
-              break;
-            }
-          }
+          // Since obstacles are removed, we don't need to check for overlap
+          // Just set validPosition to true always
           
           // Check if enemy overlaps with any existing enemy - increased margin for bigger enemies
           for (const enemy of enemies) {
@@ -300,7 +253,7 @@
           if (newEnemy.x + newEnemy.radius + 100 > pyramidX && 
               newEnemy.x - newEnemy.radius - 100 < pyramidX + pyramidWidth) {
             validPosition = false;
-            break; // Changed from continue to break to avoid infinite loop
+            // Skip adding this enemy
           }
           
           // If position is valid, add enemy, otherwise try again
