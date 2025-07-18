@@ -37,7 +37,7 @@ export default function GameCanvas() {
     pointA: {
       x: 50,
       y: GROUND_LEVEL - 300, // Ground level - height
-      width: 240, // Reduced by 20% from 300
+      width: 192, // Reduced by another 20% (total 36% reduction from original 300)
       height: 300,
       image: null,
       flipHorizontal: true // Flag to flip the image horizontally
@@ -355,12 +355,13 @@ export default function GameCanvas() {
         const dy = ball.y - enemy.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Always move directly toward the player
+        // Always move directly toward the player at constant speed
         if (distance < 800) { // Large detection radius so they always chase
           // Calculate direction to player
           const directionX = dx / distance;
           
-          // Set velocity directly based on direction and chase speed
+          // Set velocity directly based on direction and constant chase speed
+          // This ensures they always move at exactly the same speed regardless of player position
           enemy.velocityX = directionX * enemy.chaseSpeed;
         } else {
           // Stand still if player is too far away
