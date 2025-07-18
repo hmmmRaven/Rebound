@@ -17,9 +17,21 @@ export default function GameCanvas() {
   const [health, setHealth] = useState(100);
   const [gameOver, setGameOver] = useState(false);
   const [powerUps, setPowerUps] = useState([]);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
 
   // Get level data
   const currentLevel = getLevel(0); // Start with the first level
+  
+  // Enemy types
+  const enemyTypes = ['Enemy_1.png', 'dog_chase.png'];
+  
+  // Image references
+  const imageRefs = useRef({
+    ball: new Image(),
+    background: new Image(),
+    ground: new Image(),
+    enemies: {}
+  });
   
   // Game state
   const gameState = useRef({
@@ -35,6 +47,7 @@ export default function GameCanvas() {
       color: '#ff4757',
       invincible: false,
       invincibleTimer: 0,
+      image: null
     },
     platforms: currentLevel.platforms,
     obstacles: [], // Empty obstacles array - no obstacles in the game
@@ -42,6 +55,7 @@ export default function GameCanvas() {
       ...enemy,
       active: true,
       lastJump: 0, // For jumper enemies
+      image: null
     })),
     collectibles: currentLevel.collectibles.map(collectible => ({
       ...collectible,
@@ -51,9 +65,57 @@ export default function GameCanvas() {
     friction: 0.8,
     ground: currentLevel.boundaries.height - 20, // Canvas height - ball radius
     backgroundColor: currentLevel.backgroundColor,
-    gameTime: 0
+    gameTime: 0,
+    background: null,
+    groundImage: null
   });
 
+  // Load images
+  useEffect(() => {
+    // Load ball image
+    imageRefs.current.ball.src = '/images/basketball.png';
+    imageRefs.current.ball.onload = () => {
+      gameState.current.ball.image = imageRefs.current.ball;
+    };
+    
+    // Load background image
+    imageRefs.current.background.src = '/images/background_city.jpg';
+    imageRefs.current.background.onload = () => {
+      gameState.current.background = imageRefs.current.background;
+    };
+    
+    // Load ground image
+    imageRefs.current.ground.src = '/images/ground_city.png';
+    imageRefs.current.ground.onload = () => {
+      gameState.current.groundImage = imageRefs.current.ground;
+    };
+    
+    // Preload enemy images
+    enemyTypes.forEach(type => {
+      imageRefs.current.enemies[type] = new Image();
+      imageRefs.current.enemies[type].src = `/images/${type}`;
+    });
+    
+    // Assign random enemy images
+    gameState.current.enemies.forEach(enemy => {
+      const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+      enemy.imageType = randomType;
+    });
+    
+    // Set images loaded flag
+    const checkAllImagesLoaded = setInterval(() => {
+      if (gameState.current.ball.image && 
+          gameState.current.background && 
+          gameState.current.groundImage && 
+          Object.keys(imageRefs.current.enemies).every(key => imageRefs.current.enemies[key].complete)) {
+        setImagesLoaded(true);
+        clearInterval(checkAllImagesLoaded);
+      }
+    }, 100);
+    
+    return () => clearInterval(checkAllImagesLoaded);
+  }, []);
+  
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -405,6 +467,28 @@ export default function GameCanvas() {
         }
       }
 
+      // Draw background
+      if (gameState.current.background) {
+        ctx.drawImage(gameState.current.background, 0, 0, canvas.width, canvas.height);
+      } else {
+        // Fallback to color background
+        ctx.fillStyle = gameState.current.backgroundColor || '#f1f2f6';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      // Draw ground
+      if (gameState.current.groundImage) {
+        const groundImg = gameState.current.groundImage;
+        const groundHeight = 40; // Height of the ground image
+        for (let x = 0; x < canvas.width; x += groundImg.width) {
+          ctx.drawImage(groundImg, x, gameState.current.ground + ball.radius - 5, groundImg.width, groundHeight);
+        }
+      } else {
+        // Fallback to simple ground
+        ctx.fillStyle = '#2f3542';
+        ctx.fillRect(0, gameState.current.ground + ball.radius, canvas.width, 5);
+      }
+      
       // Draw platforms
       platforms.forEach(platform => {
         ctx.fillStyle = platform.color || '#3742fa';
@@ -417,23 +501,35 @@ export default function GameCanvas() {
       enemies.forEach(enemy => {
         if (!enemy.active) return;
         
-        ctx.fillStyle = enemy.color;
-        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-        
-        // Draw enemy details
-        if (enemy.type === 'walker') {
-          // Draw eyes
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(enemy.x + enemy.width * 0.3, enemy.y + enemy.height * 0.3, 5, 0, Math.PI * 2);
-          ctx.arc(enemy.x + enemy.width * 0.7, enemy.y + enemy.height * 0.3, 5, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (enemy.type === 'jumper') {
-          // Draw jumper details
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(enemy.x + enemy.width * 0.5, enemy.y + enemy.height * 0.3, 8, 0, Math.PI * 2);
-          ctx.fill();
+        if (enemy.imageType && imageRefs.current.enemies[enemy.imageType]) {
+          // Draw enemy using image
+          ctx.drawImage(
+            imageRefs.current.enemies[enemy.imageType], 
+            enemy.x - enemy.width/2, 
+            enemy.y - enemy.height/2, 
+            enemy.width * 2, 
+            enemy.height * 2
+          );
+        } else {
+          // Fallback to rectangle with eyes
+          ctx.fillStyle = enemy.color;
+          ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+          
+          // Draw enemy details
+          if (enemy.type === 'walker') {
+            // Draw eyes
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(enemy.x + enemy.width * 0.3, enemy.y + enemy.height * 0.3, 5, 0, Math.PI * 2);
+            ctx.arc(enemy.x + enemy.width * 0.7, enemy.y + enemy.height * 0.3, 5, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (enemy.type === 'jumper') {
+            // Draw jumper details
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(enemy.x + enemy.width * 0.5, enemy.y + enemy.height * 0.3, 8, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       });
       
@@ -462,23 +558,30 @@ export default function GameCanvas() {
         }
       });
 
-      // Draw ball with invincibility effect
-      ctx.beginPath();
-      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-      
-      if (ball.invincible && Math.floor(gameState.current.gameTime / 5) % 2 === 0) {
-        // Flashing effect when invincible
-        ctx.fillStyle = '#ffffff';
+      // Draw ball with image or fallback to circle
+      if (ball.image) {
+        ctx.drawImage(
+          ball.image, 
+          ball.x - ball.radius, 
+          ball.y - ball.radius, 
+          ball.radius * 2, 
+          ball.radius * 2
+        );
       } else {
-        ctx.fillStyle = ball.color;
+        // Fallback to simple ball
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        
+        if (ball.invincible && Math.floor(gameState.current.gameTime / 5) % 2 === 0) {
+          // Flashing effect when invincible
+          ctx.fillStyle = '#ffffff';
+        } else {
+          ctx.fillStyle = ball.color;
+        }
+        
+        ctx.fill();
+        ctx.closePath();
       }
-      
-      ctx.fill();
-      ctx.closePath();
-
-      // Draw ground
-      ctx.fillStyle = '#2f3542';
-      ctx.fillRect(0, gameState.current.ground + ball.radius, canvas.width, 5);
       
       // Draw UI
       ctx.fillStyle = '#2f3542';
