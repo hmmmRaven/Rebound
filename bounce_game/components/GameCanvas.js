@@ -238,15 +238,12 @@ export default function GameCanvas() {
       const enemy1Image = new Image();
       const dogImage = new Image();
       
-      // Set sources
-      ballImage.src = '/images/basketball.png';
-      backgroundImage.src = '/images/city_background.jpg';
-      groundImage.src = '/images/ground.png';
-      courtImage.src = '/images/basketball_court.jpg';
-      hoopImage.src = '/images/basketball_hoop.png';
-      
-      enemy1Image.src = '/images/Enemy_1.png';
-      dogImage.src = '/images/dog_chase.png';
+      // Error handler for images
+      const handleImageError = (imageName) => {
+        console.error(`Failed to load image: ${imageName}`);
+        // Count as loaded to avoid blocking the game
+        handleImageLoaded();
+      };
       
       // Set up load event handlers
       ballImage.onload = handleImageLoaded;
@@ -254,9 +251,25 @@ export default function GameCanvas() {
       groundImage.onload = handleImageLoaded;
       courtImage.onload = handleImageLoaded;
       hoopImage.onload = handleImageLoaded;
-      
-      // Only count one enemy image load since we have multiple types
       enemy1Image.onload = handleImageLoaded;
+      
+      // Set up error handlers
+      ballImage.onerror = () => handleImageError('basketball.png');
+      backgroundImage.onerror = () => handleImageError('city_background.jpg');
+      groundImage.onerror = () => handleImageError('ground.png');
+      courtImage.onerror = () => handleImageError('basketball_court.jpg');
+      hoopImage.onerror = () => handleImageError('basketball_hoop.png');
+      enemy1Image.onerror = () => handleImageError('Enemy_1.png');
+      dogImage.onerror = () => handleImageError('dog_chase.png');
+      
+      // Set sources - do this after setting up handlers
+      ballImage.src = '/images/basketball.png';
+      backgroundImage.src = '/images/city_background.jpg';
+      groundImage.src = '/images/ground.png';
+      courtImage.src = '/images/basketball_court.jpg';
+      hoopImage.src = '/images/basketball_hoop.png';
+      enemy1Image.src = '/images/Enemy_1.png';
+      dogImage.src = '/images/dog_chase.png';
       
       // Store references
       imageRefs.current.ball = ballImage;
@@ -389,48 +402,73 @@ export default function GameCanvas() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       // Draw background
-      if (gameState.current.background) {
-        ctx.drawImage(gameState.current.background, 0, 0, canvas.width, canvas.height);
-      } else {
+      try {
+        if (gameState.current.background && gameState.current.background.complete && gameState.current.background.naturalWidth > 0) {
+          ctx.drawImage(gameState.current.background, 0, 0, canvas.width, canvas.height);
+        } else {
+          // Fallback to color background
+          ctx.fillStyle = gameState.current.backgroundColor || '#87CEEB';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      } catch (error) {
+        console.error('Error drawing background:', error);
         // Fallback to color background
         ctx.fillStyle = gameState.current.backgroundColor || '#87CEEB';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       
       // Draw basketball court
-      if (gameState.current.courtImage) {
-        ctx.drawImage(
-          gameState.current.courtImage,
-          0 - camera.x,
-          ground - 100,
-          1000,
-          100
-        );
+      try {
+        if (gameState.current.courtImage && gameState.current.courtImage.complete && gameState.current.courtImage.naturalWidth > 0) {
+          ctx.drawImage(
+            gameState.current.courtImage,
+            0 - camera.x,
+            ground - 100,
+            1000,
+            100
+          );
+        }
+      } catch (error) {
+        console.error('Error drawing court:', error);
       }
       
       // Draw ground
-      if (gameState.current.groundImage) {
-        const groundImg = gameState.current.groundImage;
-        const groundHeight = 40; // Height of the ground image
-        for (let x = 0; x < canvas.width + groundImg.width; x += groundImg.width) {
-          ctx.drawImage(groundImg, x - camera.x % groundImg.width, ground, groundImg.width, groundHeight);
+      try {
+        if (gameState.current.groundImage && gameState.current.groundImage.complete && gameState.current.groundImage.naturalWidth > 0) {
+          const groundImg = gameState.current.groundImage;
+          const groundHeight = 40; // Height of the ground image
+          for (let x = 0; x < canvas.width + groundImg.width; x += groundImg.width) {
+            ctx.drawImage(groundImg, x - camera.x % groundImg.width, ground, groundImg.width, groundHeight);
+          }
+        } else {
+          // Fallback to simple ground
+          ctx.fillStyle = '#2f3542';
+          ctx.fillRect(0, ground, canvas.width, 40);
         }
-      } else {
+      } catch (error) {
+        console.error('Error drawing ground:', error);
         // Fallback to simple ground
         ctx.fillStyle = '#2f3542';
         ctx.fillRect(0, ground, canvas.width, 40);
       }
       
       // Draw basketball hoop
-      if (basketballHoop.image) {
-        ctx.drawImage(
-          basketballHoop.image,
-          basketballHoop.x - camera.x,
-          basketballHoop.y,
-          basketballHoop.width,
-          basketballHoop.height
-        );
-      } else {
+      try {
+        if (basketballHoop.image && basketballHoop.image.complete && basketballHoop.image.naturalWidth > 0) {
+          ctx.drawImage(
+            basketballHoop.image,
+            basketballHoop.x - camera.x,
+            basketballHoop.y,
+            basketballHoop.width,
+            basketballHoop.height
+          );
+        } else {
+          // Fallback to simple hoop
+          ctx.fillStyle = '#e84118';
+          ctx.fillRect(basketballHoop.x - camera.x, basketballHoop.y, basketballHoop.width, basketballHoop.height);
+        }
+      } catch (error) {
+        console.error('Error drawing basketball hoop:', error);
         // Fallback to simple hoop
         ctx.fillStyle = '#e84118';
         ctx.fillRect(basketballHoop.x - camera.x, basketballHoop.y, basketballHoop.width, basketballHoop.height);
@@ -440,16 +478,26 @@ export default function GameCanvas() {
       enemies.forEach(enemy => {
         if (!enemy.active) return;
         
-        if (enemy.imageType && imageRefs.current.enemies[enemy.imageType]) {
-          // Draw enemy using image
-          ctx.drawImage(
-            imageRefs.current.enemies[enemy.imageType],
-            enemy.x - enemy.radius - camera.x,
-            enemy.y - enemy.radius,
-            enemy.radius * 2,
-            enemy.radius * 2
-          );
-        } else {
+        try {
+          const enemyImage = enemy.imageType && imageRefs.current.enemies[enemy.imageType];
+          if (enemyImage && enemyImage.complete && enemyImage.naturalWidth > 0) {
+            // Draw enemy using image
+            ctx.drawImage(
+              enemyImage,
+              enemy.x - enemy.radius - camera.x,
+              enemy.y - enemy.radius,
+              enemy.radius * 2,
+              enemy.radius * 2
+            );
+          } else {
+            // Fallback to simple enemy
+            ctx.fillStyle = enemy.color || '#e84118';
+            ctx.beginPath();
+            ctx.arc(enemy.x - camera.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } catch (error) {
+          console.error('Error drawing enemy:', error);
           // Fallback to simple enemy
           ctx.fillStyle = enemy.color || '#e84118';
           ctx.beginPath();
@@ -459,15 +507,24 @@ export default function GameCanvas() {
       });
       
       // Draw ball
-      if (ball.image) {
-        ctx.drawImage(
-          ball.image,
-          ball.x - ball.radius - camera.x,
-          ball.y - ball.radius,
-          ball.radius * 2,
-          ball.radius * 2
-        );
-      } else {
+      try {
+        if (ball.image && ball.image.complete && ball.image.naturalWidth > 0) {
+          ctx.drawImage(
+            ball.image,
+            ball.x - ball.radius - camera.x,
+            ball.y - ball.radius,
+            ball.radius * 2,
+            ball.radius * 2
+          );
+        } else {
+          // Fallback to simple ball
+          ctx.fillStyle = '#e1b12c';
+          ctx.beginPath();
+          ctx.arc(ball.x - camera.x, ball.y, ball.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } catch (error) {
+        console.error('Error drawing ball:', error);
         // Fallback to simple ball
         ctx.fillStyle = '#e1b12c';
         ctx.beginPath();
