@@ -2,177 +2,154 @@
 
 import { useEffect, useRef, useState } from 'react';
 import styles from './GameCanvas.module.css';
-import { getLevel, enemyTypes, obstacleTypes, collectibleEffects } from '../data/levels';
 
 export default function GameCanvas() {
   const canvasRef = useRef(null);
-  const [keys, setKeys] = useState({
-    left: false,
-    right: false,
-    up: false,
-  });
-  
-  // Game UI state
-  const [score, setScore] = useState(0);
-  const [health, setHealth] = useState(100);
-  const [gameOver, setGameOver] = useState(false);
-  const [powerUps, setPowerUps] = useState([]);
   const [imagesLoaded, setImagesLoaded] = useState(false);
-
-  // Get level data
-  const currentLevel = getLevel(0); // Start with the first level
-  
-  // Add basketball hoop image reference
-  const [basketballHoop, setBasketballHoop] = useState(null);
-  
-  // Enemy types
-  const enemyTypes = ['Enemy_1.png', 'dog_chase.png'];
-  
-  // Image references - initialized as empty objects to be filled in useEffect
-  const imageRefs = useRef({
-    ball: null,
-    background: null,
-    ground: null,
-    enemies: {}
-  });
+  const [totalImagesLoaded, setTotalImagesLoaded] = useState(0);
+  const totalImagesToLoad = useRef(6); // Ball, background, ground, court, hoop, enemies (2)
   
   // Game state
   const gameState = useRef({
+    gameOver: false,
+    gameWon: false,
+    score: 0,
+    health: 100,
     ball: {
-      x: currentLevel.ballStart.x,
-      y: currentLevel.ballStart.y,
+      x: 100,
+      y: 300,
       radius: 20,
       velocityX: 0,
       velocityY: 0,
       speed: 5,
       jumpStrength: 15,
-      isJumping: false,
-      color: '#ff4757',
-      invincible: false,
-      invincibleTimer: 0,
+      onGround: false,
       image: null
     },
-    platforms: currentLevel.platforms,
-    obstacles: [], // Empty obstacles array - no obstacles in the game
-    enemies: currentLevel.enemies.map(enemy => ({
-      ...enemy,
-      active: true,
-      lastJump: 0, // For jumper enemies
-      image: null
-    })),
-    collectibles: currentLevel.collectibles.map(collectible => ({
-      ...collectible,
-      active: true
-    })),
-    gravity: 0.8,
+    ground: 500,
+    gravity: 0.6,
     friction: 0.8,
-    ground: currentLevel.boundaries.height - 20, // Canvas height - ball radius
-    backgroundColor: currentLevel.backgroundColor,
-    gameTime: 0,
+    backgroundColor: '#87CEEB',
     background: null,
-    groundImage: null
+    groundImage: null,
+    courtImage: null,
+    basketballHoop: {
+      x: 700,
+      y: 350,
+      width: 80,
+      height: 150,
+      image: null
+    },
+    camera: {
+      x: 0,
+      y: 0
+    },
+    gameTime: 0,
+    enemies: [],
+    collectibles: []
   });
 
-  // Load images - only runs in browser environment
-  useEffect(() => {
-    // Initialize images only on client-side
-    if (typeof window !== 'undefined') {
-      // Create Image objects
-      imageRefs.current.ball = new Image();
-      imageRefs.current.background = new Image();
-      imageRefs.current.ground = new Image();
-      
-      // Load ball image
-      imageRefs.current.ball.src = '/images/basketball.png';
-      imageRefs.current.ball.onload = () => {
-        gameState.current.ball.image = imageRefs.current.ball;
-      };
-      
-      // Load background image
-      imageRefs.current.background.src = '/images/background_city.jpg';
-      imageRefs.current.background.onload = () => {
-        gameState.current.background = imageRefs.current.background;
-      };
-      
-      // Load ground image
-      imageRefs.current.ground.src = '/images/ground_city.png';
-      imageRefs.current.ground.onload = () => {
-        gameState.current.groundImage = imageRefs.current.ground;
-      };
-      
-      // Load basketball hoop image
-      const hoopImage = new Image();
-      hoopImage.src = '/images/basketball_hoop.png';
-      hoopImage.onload = () => {
-        setBasketballHoop(hoopImage);
-      };
-      
-      // Preload enemy images
-      enemyTypes.forEach(type => {
-        imageRefs.current.enemies[type] = new Image();
-        imageRefs.current.enemies[type].src = `/images/${type}`;
-      });
-      
-      // Assign random enemy images
-      gameState.current.enemies.forEach(enemy => {
-        const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-        enemy.imageType = randomType;
-      });
-      
-      // Set images loaded flag
-      const checkAllImagesLoaded = setInterval(() => {
-        if (gameState.current.ball.image && 
-            gameState.current.background && 
-            gameState.current.groundImage && 
-            Object.keys(imageRefs.current.enemies).every(key => imageRefs.current.enemies[key].complete)) {
-          setImagesLoaded(true);
-          clearInterval(checkAllImagesLoaded);
-        }
-      }, 100);
-      
-      return () => clearInterval(checkAllImagesLoaded);
-    }
-  }, []);
+  // Input state
+  const keys = useRef({
+    left: false,
+    right: false,
+    up: false
+  });
   
-  // Handle keyboard input
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'ArrowLeft') setKeys(prev => ({ ...prev, left: true }));
-      if (e.key === 'ArrowRight') setKeys(prev => ({ ...prev, right: true }));
-      if (e.key === 'ArrowUp' || e.key === ' ') setKeys(prev => ({ ...prev, up: true }));
-    };
-
-    const handleKeyUp = (e) => {
-      if (e.key === 'ArrowLeft') setKeys(prev => ({ ...prev, left: false }));
-      if (e.key === 'ArrowRight') setKeys(prev => ({ ...prev, right: false }));
-      if (e.key === 'ArrowUp' || e.key === ' ') setKeys(prev => ({ ...prev, up: false }));
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-  // Check if ball is on a platform
-  const isOnPlatform = () => {
-    const { ball, platforms } = gameState.current;
-    
-    for (const platform of platforms) {
-      if (
-        ball.x + ball.radius > platform.x &&
-        ball.x - ball.radius < platform.x + platform.width &&
-        ball.y + ball.radius >= platform.y - 1 &&
-        ball.y + ball.radius <= platform.y + 5
-      ) {
-        return true;
+  // Image references
+  const imageRefs = useRef({
+    ball: null,
+    background: null,
+    ground: null,
+    court: null,
+    hoop: null,
+    enemies: {}
+  });
+  
+  // Function to handle image loading completion
+  const handleImageLoaded = () => {
+    setTotalImagesLoaded(prev => {
+      const newCount = prev + 1;
+      if (newCount >= totalImagesToLoad.current) {
+        setImagesLoaded(true);
       }
+      return newCount;
+    });
+  };
+  
+  // Generate enemies function
+  const generateEnemies = () => {
+    const enemyTypes = ['Enemy_1.png', 'dog_chase.png'];
+    const enemies = [];
+    
+    // Create 5 enemies
+    for (let i = 0; i < 5; i++) {
+      const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+      enemies.push({
+        x: Math.random() * 1500 + 200,
+        y: gameState.current.ground - 40,
+        width: 40,
+        height: 40,
+        radius: 20,
+        velocityX: Math.random() * 2 - 1,
+        velocityY: 0,
+        speed: 1 + Math.random() * 2,
+        type: 'walker',
+        color: '#e84118',
+        active: true,
+        imageType: randomType
+      });
     }
     
-    return ball.y >= gameState.current.ground;
+    gameState.current.enemies = enemies;
+  };
+  
+  // Initialize game state function
+  const initializeGameState = () => {
+    return {
+      gameOver: false,
+      gameWon: false,
+      score: 0,
+      health: 100,
+      ball: {
+        x: 100,
+        y: 300,
+        radius: 20,
+        velocityX: 0,
+        velocityY: 0,
+        speed: 5,
+        jumpStrength: 15,
+        onGround: false,
+        image: imageRefs.current.ball
+      },
+      ground: 500,
+      gravity: 0.6,
+      friction: 0.8,
+      backgroundColor: '#87CEEB',
+      background: imageRefs.current.background,
+      groundImage: imageRefs.current.ground,
+      courtImage: imageRefs.current.court,
+      basketballHoop: {
+        x: 700,
+        y: 350,
+        width: 80,
+        height: 150,
+        image: imageRefs.current.hoop
+      },
+      camera: {
+        x: 0,
+        y: 0
+      },
+      gameTime: 0,
+      enemies: [],
+      collectibles: []
+    };
+  };
+  
+  // Check if ball is on ground
+  const isOnGround = () => {
+    const { ball, ground } = gameState.current;
+    return ball.y + ball.radius >= ground;
   };
   
   // Check collision between ball and rectangular object
@@ -195,329 +172,269 @@ export default function GameCanvas() {
     const dx = ball.x - circle.x;
     const dy = ball.y - circle.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    return distance < (ball.radius + circle.radius);
-  };
-  
-  // Apply damage to player
-  const applyDamage = (damageAmount) => {
-    const { ball } = gameState.current;
-    
-    // Skip damage if player is invincible
-    if (ball.invincible) return;
-    
-    // Apply damage and update health
-    setHealth(prevHealth => {
-      const newHealth = Math.max(0, prevHealth - damageAmount);
-      
-      // Check for game over
-      if (newHealth <= 0) {
-        setGameOver(true);
-      }
-      
-      return newHealth;
-    });
-    
-    // Make player temporarily invincible
-    ball.invincible = true;
-    ball.invincibleTimer = 60; // Frames of invincibility
+    return distance < ball.radius + circle.radius;
   };
   
   // Handle enemy collision
   const handleEnemyCollision = (enemy) => {
+    if (gameState.current.gameOver || gameState.current.gameWon) return;
+    
+    // Decrease health
+    gameState.current.health -= 10;
+    
+    // Check if game over
+    if (gameState.current.health <= 0) {
+      gameState.current.gameOver = true;
+    }
+    
+    // Bounce off enemy
     const { ball } = gameState.current;
-    const enemyInfo = enemyTypes[enemy.type];
+    const dx = ball.x - enemy.x;
+    const dy = ball.y - enemy.y;
+    const angle = Math.atan2(dy, dx);
     
-    // Check if player is landing on top of the enemy
-    const isLandingOnEnemy = 
-      ball.velocityY > 0 && 
-      ball.y < enemy.y - enemy.height/2 &&
-      enemyInfo.canBeJumpedOn;
-    
-    if (isLandingOnEnemy) {
-      // Bounce off enemy
-      ball.velocityY = -ball.jumpStrength * 0.7;
-      
-      // Deactivate enemy
-      enemy.active = false;
-      
-      // Add score
-      setScore(prev => prev + 50);
-    } else {
-      // Player takes damage
-      applyDamage(enemyInfo.damage);
-    }
+    ball.velocityX = Math.cos(angle) * 10;
+    ball.velocityY = Math.min(Math.sin(angle) * 10, -10); // Ensure upward bounce
   };
   
-  // Handle obstacle collision
-  const handleObstacleCollision = (obstacle) => {
-    const obstacleInfo = obstacleTypes[obstacle.type];
-    applyDamage(obstacleInfo.damage);
-  };
-  
-  // Handle collectible collection
-  const handleCollectibleCollection = (collectible) => {
-    // Deactivate collectible
-    collectible.active = false;
+  // Check if ball reached goal (basketball hoop)
+  const checkGoal = () => {
+    const { ball, basketballHoop } = gameState.current;
     
-    if (collectible.type === 'coin') {
-      // Add score
-      setScore(prev => prev + collectible.value);
-    } else if (collectible.type === 'powerup') {
-      // Apply power-up effect
-      const effect = collectible.effect;
-      const effectInfo = collectibleEffects.powerup[effect];
+    // Check if ball is inside the hoop
+    if (ball.x > basketballHoop.x + 20 && 
+        ball.x < basketballHoop.x + basketballHoop.width - 20 &&
+        ball.y > basketballHoop.y && 
+        ball.y < basketballHoop.y + 30) {
       
-      // Add to active power-ups
-      setPowerUps(prev => [
-        ...prev,
-        {
-          type: effect,
-          duration: effectInfo.duration,
-          startTime: gameState.current.gameTime,
-          ...effectInfo
-        }
-      ]);
+      // Score points
+      gameState.current.score += 10;
       
-      // Apply immediate effects
-      if (effect === 'jump_boost') {
-        gameState.current.ball.jumpStrength *= effectInfo.multiplier;
+      // Check if won
+      if (gameState.current.score >= 50) {
+        gameState.current.gameWon = true;
       }
+      
+      // Reset ball position
+      ball.x = 100;
+      ball.y = 300;
+      ball.velocityX = 0;
+      ball.velocityY = 0;
     }
   };
+  
+  // Load images - only runs in browser environment
+  useEffect(() => {
+    // Initialize images only on client-side
+    if (typeof window !== 'undefined') {
+      // Create image objects
+      const ballImage = new Image();
+      const backgroundImage = new Image();
+      const groundImage = new Image();
+      const courtImage = new Image();
+      const hoopImage = new Image();
+      
+      // Enemy images
+      const enemy1Image = new Image();
+      const dogImage = new Image();
+      
+      // Set sources
+      ballImage.src = '/images/basketball.png';
+      backgroundImage.src = '/images/city_background.jpg';
+      groundImage.src = '/images/ground.png';
+      courtImage.src = '/images/basketball_court.jpg';
+      hoopImage.src = '/images/basketball_hoop.png';
+      
+      enemy1Image.src = '/images/Enemy_1.png';
+      dogImage.src = '/images/dog_chase.png';
+      
+      // Set up load event handlers
+      ballImage.onload = handleImageLoaded;
+      backgroundImage.onload = handleImageLoaded;
+      groundImage.onload = handleImageLoaded;
+      courtImage.onload = handleImageLoaded;
+      hoopImage.onload = handleImageLoaded;
+      
+      // Only count one enemy image load since we have multiple types
+      enemy1Image.onload = handleImageLoaded;
+      
+      // Store references
+      imageRefs.current.ball = ballImage;
+      imageRefs.current.background = backgroundImage;
+      imageRefs.current.ground = groundImage;
+      imageRefs.current.court = courtImage;
+      imageRefs.current.hoop = hoopImage;
+      
+      // Store enemy images
+      imageRefs.current.enemies = {
+        'Enemy_1.png': enemy1Image,
+        'dog_chase.png': dogImage
+      };
+      
+      // Set up keyboard event handlers
+      const handleKeyDown = (e) => {
+        if (e.code === 'ArrowLeft') keys.current.left = true;
+        if (e.code === 'ArrowRight') keys.current.right = true;
+        if (e.code === 'ArrowUp' || e.code === 'Space') keys.current.up = true;
+      };
+      
+      const handleKeyUp = (e) => {
+        if (e.code === 'ArrowLeft') keys.current.left = false;
+        if (e.code === 'ArrowRight') keys.current.right = false;
+        if (e.code === 'ArrowUp' || e.code === 'Space') keys.current.up = false;
+      };
+      
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      
+      // Initialize game state with images
+      gameState.current = initializeGameState();
+      
+      // Generate enemies
+      generateEnemies();
+      
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
+    }
+  }, []);
   
   // Game loop
   useEffect(() => {
     // Only run canvas code in browser environment
-    if (typeof window === 'undefined' || !canvasRef.current) return;
+    if (typeof window === 'undefined' || !canvasRef.current || totalImagesLoaded < totalImagesToLoad.current) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
+    
     let animationFrameId;
-
-    const render = () => {
-      if (gameOver) {
-        // Show game over screen
-        ctx.fillStyle = '#2f3542';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.font = '48px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.fillText('Game Over', canvas.width/2, canvas.height/2 - 50);
-        
-        ctx.font = '24px Arial';
-        ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 20);
-        ctx.fillText('Press Space to Restart', canvas.width/2, canvas.height/2 + 60);
-        
-        // Check for restart
-        if (keys.up) {
-          // Reset game
-          setGameOver(false);
-          setHealth(100);
-          setScore(0);
-          setPowerUps([]);
-          
-          // Reset game state
-          gameState.current = {
-            ...gameState.current,
-            ball: {
-              ...gameState.current.ball,
-              x: currentLevel.ballStart.x,
-              y: currentLevel.ballStart.y,
-              velocityX: 0,
-              velocityY: 0,
-              invincible: false,
-              invincibleTimer: 0
-            },
-            obstacles: [], // Keep obstacles empty
-            enemies: currentLevel.enemies.map(enemy => ({
-              ...enemy,
-              active: true,
-              lastJump: 0
-            })),
-            collectibles: currentLevel.collectibles.map(collectible => ({
-              ...collectible,
-              active: true
-            })),
-            gameTime: 0
-          };
-        }
-        
-        animationFrameId = window.requestAnimationFrame(render);
-        return;
-      }
+    
+    const gameLoop = () => {
+      const { ball, enemies, ground, gravity, friction, camera, basketballHoop } = gameState.current;
       
-      // Increment game time
+      // Update game time
       gameState.current.gameTime++;
       
-      // Clear canvas
-      ctx.fillStyle = gameState.current.backgroundColor || '#f1f2f6';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      const { ball, platforms, obstacles, enemies, collectibles, gravity, friction } = gameState.current;
-
-      // Update ball position based on keyboard input
-      if (keys.left) ball.velocityX -= ball.speed * 0.1;
-      if (keys.right) ball.velocityX += ball.speed * 0.1;
-      
-      // Apply jump if on ground or platform and up key is pressed
-      if (keys.up && isOnPlatform()) {
-        ball.velocityY = -ball.jumpStrength;
-        ball.isJumping = true;
-      }
-
-      // Apply physics
-      ball.velocityY += gravity;
-      ball.velocityX *= friction;
-
-      // Update position
-      ball.x += ball.velocityX;
-      ball.y += ball.velocityY;
-
-      // Check boundaries
-      if (ball.x - ball.radius < 0) {
-        ball.x = ball.radius;
-        ball.velocityX = 0;
-      }
-      
-      if (ball.x + ball.radius > canvas.width) {
-        ball.x = canvas.width - ball.radius;
-        ball.velocityX = 0;
-      }
-
-      // Check ground collision
-      if (ball.y + ball.radius > gameState.current.ground) {
-        ball.y = gameState.current.ground - ball.radius;
-        ball.velocityY = 0;
-        ball.isJumping = false;
-      }
-
-      // Check platform collisions
-      for (const platform of platforms) {
-        if (
-          ball.x + ball.radius > platform.x &&
-          ball.x - ball.radius < platform.x + platform.width &&
-          ball.y + ball.radius >= platform.y - 1 &&
-          ball.y + ball.radius <= platform.y + 5 &&
-          ball.velocityY > 0
-        ) {
-          ball.y = platform.y - ball.radius;
+      // Skip updates if game over or won
+      if (!gameState.current.gameOver && !gameState.current.gameWon) {
+        // Handle input
+        if (keys.current.left) {
+          ball.velocityX -= ball.speed * 0.1;
+        }
+        if (keys.current.right) {
+          ball.velocityX += ball.speed * 0.1;
+        }
+        if (keys.current.up && isOnGround()) {
+          ball.velocityY = -ball.jumpStrength;
+        }
+        
+        // Apply physics
+        ball.velocityY += gravity;
+        ball.velocityX *= friction;
+        
+        // Update position
+        ball.x += ball.velocityX;
+        ball.y += ball.velocityY;
+        
+        // Ground collision
+        if (ball.y + ball.radius > ground) {
+          ball.y = ground - ball.radius;
           ball.velocityY = 0;
-          ball.isJumping = false;
         }
-      }
-      
-      // Update enemies
-      for (const enemy of enemies) {
-        if (!enemy.active) continue;
         
-        if (enemy.type === 'walker') {
-          // Move enemy back and forth
-          enemy.x += enemy.speed * enemy.direction;
+        // Update camera to follow ball
+        camera.x = ball.x - canvas.width / 2;
+        
+        // Keep camera within bounds
+        camera.x = Math.max(0, camera.x);
+        
+        // Update enemies
+        for (const enemy of enemies) {
+          if (!enemy.active) continue;
           
-          // Change direction at patrol boundaries
-          if (enemy.x <= enemy.patrolStart || enemy.x >= enemy.patrolEnd) {
-            enemy.direction *= -1;
+          // Move towards player if close
+          const distanceToPlayer = Math.abs(enemy.x - ball.x);
+          if (distanceToPlayer < 300) {
+            enemy.velocityX = enemy.x < ball.x ? enemy.speed : -enemy.speed;
+          } else {
+            // Random movement
+            if (Math.random() < 0.01) {
+              enemy.velocityX = Math.random() * 2 - 1;
+            }
           }
-        } else if (enemy.type === 'jumper') {
-          // Make enemy jump at intervals
-          if (gameState.current.gameTime - enemy.lastJump > enemy.jumpInterval / (1000/60)) {
-            enemy.velocityY = -enemy.jumpHeight * 0.1;
-            enemy.lastJump = gameState.current.gameTime;
+          
+          // Update enemy position
+          enemy.x += enemy.velocityX;
+          
+          // Keep enemy on ground
+          enemy.y = ground - enemy.height / 2;
+          
+          // Simple bounds checking
+          if (enemy.x < 0 || enemy.x > 2000) {
+            enemy.velocityX = -enemy.velocityX;
           }
           
-          // Apply gravity
-          enemy.velocityY = enemy.velocityY || 0;
-          enemy.velocityY += gravity * 0.5;
-          enemy.y += enemy.velocityY;
-          
-          // Check ground collision for jumper
-          const platformBelow = platforms.find(p => 
-            enemy.x + enemy.width > p.x &&
-            enemy.x < p.x + p.width &&
-            enemy.y + enemy.height >= p.y - 1 &&
-            enemy.y + enemy.height <= p.y + 5
-          );
-          
-          if (platformBelow) {
-            enemy.y = platformBelow.y - enemy.height;
-            enemy.velocityY = 0;
+          // Check collision with player
+          if (checkCircleCollision(ball, enemy)) {
+            handleEnemyCollision(enemy);
           }
         }
         
-        // Check collision with player
-        if (checkRectCollision(ball, enemy)) {
-          handleEnemyCollision(enemy);
-        }
+        // Check if ball reached goal
+        checkGoal();
       }
       
-      // No obstacle collisions - obstacles have been removed
+      // Render the scene
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      // Check collectible collisions
-      for (const collectible of collectibles) {
-        if (!collectible.active) continue;
-        
-        if (checkCircleCollision(ball, collectible)) {
-          handleCollectibleCollection(collectible);
-        }
-      }
-      
-      // Update power-ups
-      setPowerUps(prev => {
-        const currentTime = gameState.current.gameTime;
-        const activePowerUps = prev.filter(powerUp => {
-          const isActive = currentTime - powerUp.startTime < powerUp.duration / (1000/60);
-          
-          // Remove effect when power-up expires
-          if (!isActive && powerUp.type === 'jump_boost') {
-            gameState.current.ball.jumpStrength /= powerUp.multiplier;
-          }
-          
-          return isActive;
-        });
-        
-        return activePowerUps;
-      });
-      
-      // Update invincibility
-      if (ball.invincible) {
-        ball.invincibleTimer--;
-        if (ball.invincibleTimer <= 0) {
-          ball.invincible = false;
-        }
-      }
-
       // Draw background
       if (gameState.current.background) {
         ctx.drawImage(gameState.current.background, 0, 0, canvas.width, canvas.height);
       } else {
         // Fallback to color background
-        ctx.fillStyle = gameState.current.backgroundColor || '#f1f2f6';
+        ctx.fillStyle = gameState.current.backgroundColor || '#87CEEB';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      // Draw basketball court
+      if (gameState.current.courtImage) {
+        ctx.drawImage(
+          gameState.current.courtImage,
+          0 - camera.x,
+          ground - 100,
+          1000,
+          100
+        );
       }
       
       // Draw ground
       if (gameState.current.groundImage) {
         const groundImg = gameState.current.groundImage;
         const groundHeight = 40; // Height of the ground image
-        for (let x = 0; x < canvas.width; x += groundImg.width) {
-          ctx.drawImage(groundImg, x, gameState.current.ground + ball.radius - 5, groundImg.width, groundHeight);
+        for (let x = 0; x < canvas.width + groundImg.width; x += groundImg.width) {
+          ctx.drawImage(groundImg, x - camera.x % groundImg.width, ground, groundImg.width, groundHeight);
         }
       } else {
         // Fallback to simple ground
         ctx.fillStyle = '#2f3542';
-        ctx.fillRect(0, gameState.current.ground + ball.radius, canvas.width, 5);
+        ctx.fillRect(0, ground, canvas.width, 40);
       }
       
-      // Draw platforms
-      platforms.forEach(platform => {
-        // Use transparent blue platforms to match the HTML version
-        ctx.fillStyle = platform.color || 'rgba(0, 0, 255, 0.7)';
-        ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-      });
-      
-      // No obstacles to draw
+      // Draw basketball hoop
+      if (basketballHoop.image) {
+        ctx.drawImage(
+          basketballHoop.image,
+          basketballHoop.x - camera.x,
+          basketballHoop.y,
+          basketballHoop.width,
+          basketballHoop.height
+        );
+      } else {
+        // Fallback to simple hoop
+        ctx.fillStyle = '#e84118';
+        ctx.fillRect(basketballHoop.x - camera.x, basketballHoop.y, basketballHoop.width, basketballHoop.height);
+      }
       
       // Draw enemies
       enemies.forEach(enemy => {
@@ -526,137 +443,160 @@ export default function GameCanvas() {
         if (enemy.imageType && imageRefs.current.enemies[enemy.imageType]) {
           // Draw enemy using image
           ctx.drawImage(
-            imageRefs.current.enemies[enemy.imageType], 
-            enemy.x - enemy.width/2, 
-            enemy.y - enemy.height/2, 
-            enemy.width * 2, 
-            enemy.height * 2
+            imageRefs.current.enemies[enemy.imageType],
+            enemy.x - enemy.radius - camera.x,
+            enemy.y - enemy.radius,
+            enemy.radius * 2,
+            enemy.radius * 2
           );
         } else {
-          // Fallback to rectangle with eyes
-          ctx.fillStyle = enemy.color;
-          ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-          
-          // Draw enemy details
-          if (enemy.type === 'walker') {
-            // Draw eyes
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(enemy.x + enemy.width * 0.3, enemy.y + enemy.height * 0.3, 5, 0, Math.PI * 2);
-            ctx.arc(enemy.x + enemy.width * 0.7, enemy.y + enemy.height * 0.3, 5, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (enemy.type === 'jumper') {
-            // Draw jumper details
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(enemy.x + enemy.width * 0.5, enemy.y + enemy.height * 0.3, 8, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          // Fallback to simple enemy
+          ctx.fillStyle = enemy.color || '#e84118';
+          ctx.beginPath();
+          ctx.arc(enemy.x - camera.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+          ctx.fill();
         }
       });
       
-      // Draw collectibles
-      collectibles.forEach(collectible => {
-        if (!collectible.active) return;
-        
-        ctx.fillStyle = collectible.color;
-        ctx.beginPath();
-        ctx.arc(collectible.x, collectible.y, collectible.radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        if (collectible.type === 'coin') {
-          // Draw coin details
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(collectible.x, collectible.y, collectible.radius - 3, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (collectible.type === 'powerup') {
-          // Draw power-up details
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '12px Arial';
-          ctx.textAlign = 'center';
-          ctx.fillText('P', collectible.x, collectible.y + 4);
-        }
-      });
-
-      // Draw ball with image or fallback to circle
+      // Draw ball
       if (ball.image) {
         ctx.drawImage(
-          ball.image, 
-          ball.x - ball.radius, 
-          ball.y - ball.radius, 
-          ball.radius * 2, 
+          ball.image,
+          ball.x - ball.radius - camera.x,
+          ball.y - ball.radius,
+          ball.radius * 2,
           ball.radius * 2
         );
       } else {
         // Fallback to simple ball
+        ctx.fillStyle = '#e1b12c';
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        
-        if (ball.invincible && Math.floor(gameState.current.gameTime / 5) % 2 === 0) {
-          // Flashing effect when invincible
-          ctx.fillStyle = '#ffffff';
-        } else {
-          ctx.fillStyle = ball.color;
-        }
-        
+        ctx.arc(ball.x - camera.x, ball.y, ball.radius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.closePath();
       }
       
-      // Draw UI - simple score display like in HTML version
+      // Draw UI - score and health
       ctx.fillStyle = 'white';
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 1;
-      ctx.font = '16px Arial';
+      ctx.font = '20px Arial';
       ctx.textAlign = 'left';
+      ctx.fillText(`Score: ${gameState.current.score}`, 20, 30);
+      ctx.fillText(`Health: ${gameState.current.health}`, 20, 60);
       
-      // Create a small rounded rectangle for score
-      const scoreText = `Score: ${score}`;
-      const scoreWidth = ctx.measureText(scoreText).width + 20;
-      const scoreHeight = 30;
-      const scoreX = 10;
-      const scoreY = 10;
+      // Draw game over screen
+      if (gameState.current.gameOver) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '40px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 40);
+        ctx.font = '24px Arial';
+        ctx.fillText(`Final Score: ${gameState.current.score}`, canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Press Space to Restart', canvas.width / 2, canvas.height / 2 + 40);
+      }
       
-      // Draw score background
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.roundRect(scoreX, scoreY, scoreWidth, scoreHeight, 5);
-      ctx.fill();
-      ctx.stroke();
+      // Draw win screen
+      if (gameState.current.gameWon) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '40px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('You Win!', canvas.width / 2, canvas.height / 2 - 40);
+        ctx.font = '24px Arial';
+        ctx.fillText(`Final Score: ${gameState.current.score}`, canvas.width / 2, canvas.height / 2);
+        ctx.fillText('Press Space to Play Again', canvas.width / 2, canvas.height / 2 + 40);
+      }
       
-      // Draw score text
-      ctx.fillStyle = '#333';
-      ctx.fillText(scoreText, scoreX + 10, scoreY + 20);
-
-      // Continue animation
-      animationFrameId = window.requestAnimationFrame(render);
+      // Continue the game loop
+      animationFrameId = window.requestAnimationFrame(gameLoop);
     };
-
-    render();
-
+    
+    // Start the game loop
+    gameLoop();
+    
+    // Cleanup on unmount
     return () => {
       window.cancelAnimationFrame(animationFrameId);
     };
-  }, [keys]);
-
+  }, [imagesLoaded]);
+  
+  // Handle restart on game over or win
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleRestart = (e) => {
+      if ((gameState.current.gameOver || gameState.current.gameWon) && e.code === 'Space') {
+        // Reset game state
+        gameState.current = initializeGameState();
+        
+        // Generate enemies
+        generateEnemies();
+      }
+    };
+    
+    window.addEventListener('keydown', handleRestart);
+    
+    return () => {
+      window.removeEventListener('keydown', handleRestart);
+    };
+  }, []);
+  
+  // Render the game for display
+  const renderGame = () => {
+    if (typeof window === 'undefined' || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Show loading screen if images aren't loaded
+    if (!imagesLoaded) {
+      ctx.fillStyle = '#2f3542';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.font = '24px Arial';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.fillText('Loading...', canvas.width/2, canvas.height/2);
+      ctx.fillText(`${totalImagesLoaded}/${totalImagesToLoad.current}`, canvas.width/2, canvas.height/2 + 30);
+    }
+  };
+  
+  // Start rendering when component mounts
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    let animationFrameId;
+    
+    const renderLoop = () => {
+      renderGame();
+      animationFrameId = window.requestAnimationFrame(renderLoop);
+    };
+    
+    // Only start render loop if images aren't loaded yet
+    // Once images are loaded, the game loop will handle rendering
+    if (!imagesLoaded) {
+      renderLoop();
+    }
+    
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [imagesLoaded]);
+  
   return (
     <div className={styles.gameContainer}>
-      <canvas 
-        ref={canvasRef} 
-        className={styles.canvas} 
-        width={currentLevel.boundaries.width} 
-        height={currentLevel.boundaries.height} 
-        tabIndex={0}
+      <canvas
+        ref={canvasRef}
+        className={styles.canvas}
+        width={800}
+        height={600}
       />
-      {gameOver && (
-        <div className={styles.gameOverlay}>
-          <h2>Game Over</h2>
-          <p>Score: {score}</p>
-          <p>Press Space to Restart</p>
-        </div>
-      )}
     </div>
   );
 }
