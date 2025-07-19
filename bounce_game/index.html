@@ -178,6 +178,7 @@
           
           // No need to reassign enemy images - they're already set in generateEnemies()
           
+          console.log(`After initialization: ${gameState.enemies.length} enemies in gameState`);
           updateGameStatus();
           gameLoop();
         }
@@ -222,6 +223,8 @@
       function generateEnemies() {
         const enemies = [];
         const GRID_SIZE = 64; // Size of each grid cell in pixels
+        console.log('Generating enemies...');
+        let enemyCount = 0;
         
         // Parse the level grid to find enemy positions
         // We're looking for 'enemy_1', 'enemy_2', 'enemy_3', 'enemy_4' in the grid
@@ -258,6 +261,8 @@
               // Set image source based on enemy type
               enemy.image.src = 'public/images/Enemy_1.png';
               
+              enemyCount++;
+              console.log(`Added enemy_1/3 at position [${col}, ${row}], count: ${enemyCount}`);
               enemies.push(enemy);
             } 
             else if (cell === 'enemy_2' || cell === 'enemy_4') {
@@ -277,11 +282,14 @@
               // Set image source based on enemy type
               enemy.image.src = 'public/images/dog_chase.png';
               
+              enemyCount++;
+              console.log(`Added enemy_2/4 at position [${col}, ${row}], count: ${enemyCount}`);
               enemies.push(enemy);
             }
           }
         }
         
+        console.log(`Total enemies created: ${enemyCount}, array length: ${enemies.length}`);
         return enemies;
       }
       
