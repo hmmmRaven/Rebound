@@ -107,9 +107,11 @@ export default function GameCanvas() {
       img.src = `/images/${type}`;
       img.onload = () => {
         console.log(`Enemy image loaded: ${type}`);
+        imageLoaded(); // Increment the counter when enemy image loads
       };
       img.onerror = (err) => {
         console.error(`Failed to load enemy image: ${type}`, err);
+        imageLoaded(); // Still increment counter even if image fails to load
       };
       enemyImages[type] = img;
     });
