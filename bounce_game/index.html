@@ -99,8 +99,9 @@
       // Focus canvas for keyboard input
       canvas.focus();
       
-      // Game state
-      const LEVEL_WIDTH = 4000; // 5x the canvas width
+      // Constants
+      const GRID_SIZE = 64; // Size of each grid cell in pixels
+      const LEVEL_WIDTH = 63 * GRID_SIZE; // Width based on expanded grid (63 columns)
       const CANVAS_WIDTH = 800;
       const CANVAS_HEIGHT = 600;
       
@@ -222,59 +223,66 @@
         return [];
       }
       
-      // Generate enemies
+      // Generate enemies based on CSV/grid layout
       function generateEnemies() {
         const enemies = [];
-        const numEnemies = 8;
+        const GRID_SIZE = 64; // Size of each grid cell in pixels
         
-        for (let i = 0; i < numEnemies; i++) {
-          // Create a new enemy
-          const newEnemy = {
-            // Avoid spawning at start or near the pyramid (point B)
-            x: Math.random() * (LEVEL_WIDTH - 1200) + 400,
-            y: 580 - 45, // Ground level - radius (3x bigger)
-            radius: 45, // 3x bigger (15 * 3)
-            velocityX: 0,
-            velocityY: 0,
-            speed: 1 + Math.random() * 1.5, // Random speed between 1-2.5
-            image: new Image(),
-            alive: true // Make sure enemies are alive by default
-          };
-          
-          // Check if enemy overlaps with any obstacle
-          let validPosition = true;
-          
-          // Since obstacles are removed, we don't need to check for overlap
-          // Just set validPosition to true always
-          
-          // Check if enemy overlaps with any existing enemy - increased margin for bigger enemies
-          for (const enemy of enemies) {
-            const dx = newEnemy.x - enemy.x;
-            const dy = newEnemy.y - enemy.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+        // Parse the level grid to find enemy positions
+        // We're looking for 'enemy_1', 'enemy_2', 'enemy_3', 'enemy_4' in the grid
+        const levelGrid = [
+          ['air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air'],
+          ['air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air'],
+          ['air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air'],
+          ['air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air'],
+          ['air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air'],
+          ['Spawn','player','air','enemy_1','air','air','air','enemy_2','air','air','air','air','air','air','air','air','air','air','air','enemy_3','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','enemy_4','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','air','end'],
+          ['ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png','ground_city.png']
+        ];
+        
+        // Loop through the grid to find enemies
+        for (let row = 0; row < levelGrid.length; row++) {
+          for (let col = 0; col < levelGrid[row].length; col++) {
+            const cell = levelGrid[row][col];
             
-            if (distance < newEnemy.radius + enemy.radius + 90) { // Further increased margin for bigger enemies
-              validPosition = false;
-              break;
-            }
-          }
-          
-          // Check if enemy is near the pyramid (point B)
-          const pyramidX = gameState.pointB.x;
-          const pyramidWidth = gameState.pointB.size;
-          if (newEnemy.x + newEnemy.radius + 100 > pyramidX && 
-              newEnemy.x - newEnemy.radius - 100 < pyramidX + pyramidWidth) {
-            validPosition = false;
-            // Skip adding this enemy
-          }
-          
-          // If position is valid, add enemy, otherwise try again
-          if (validPosition) {
-            enemies.push(newEnemy);
-          } else {
-            i--; // Try again with a new position
-            if (i < -30) { // Prevent infinite loop if no valid positions can be found
-              break;
+            // Check if the cell contains an enemy
+            if (cell === 'enemy_1' || cell === 'enemy_3') {
+              // Create enemy type 1
+              const enemy = {
+                x: col * GRID_SIZE + GRID_SIZE / 2, // Center of the grid cell
+                y: row * GRID_SIZE + GRID_SIZE / 2, // Center of the grid cell
+                radius: 45, // Same size as before
+                velocityX: 0,
+                velocityY: 0,
+                speed: 1.5, // Fixed speed for enemy_1
+                image: new Image(),
+                alive: true,
+                enemyType: 'enemy_1' // Store the enemy type
+              };
+              
+              // Set image source based on enemy type
+              enemy.image.src = 'public/images/Enemy_1.png';
+              
+              enemies.push(enemy);
+            } 
+            else if (cell === 'enemy_2' || cell === 'enemy_4') {
+              // Create enemy type 2
+              const enemy = {
+                x: col * GRID_SIZE + GRID_SIZE / 2, // Center of the grid cell
+                y: row * GRID_SIZE + GRID_SIZE / 2, // Center of the grid cell
+                radius: 45, // Same size as before
+                velocityX: 0,
+                velocityY: 0,
+                speed: 2.0, // Slightly faster for enemy_2
+                image: new Image(),
+                alive: true,
+                enemyType: 'enemy_2' // Store the enemy type
+              };
+              
+              // Set image source based on enemy type
+              enemy.image.src = 'public/images/dog_chase.png';
+              
+              enemies.push(enemy);
             }
           }
         }
