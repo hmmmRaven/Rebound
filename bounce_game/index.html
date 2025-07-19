@@ -173,15 +173,10 @@
         imagesLoaded++;
         if (imagesLoaded === totalImages) {
           // All images loaded, start the game
-          // Generate enemies after all images are loaded
+          // Generate enemies from the level grid
           gameState.enemies = generateEnemies();
           
-          // Assign preloaded enemy images
-          for (const enemy of gameState.enemies) {
-            // Randomly select enemy type
-            const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-            enemy.image = enemyImages[randomType];
-          }
+          // No need to reassign enemy images - they're already set in generateEnemies()
           
           updateGameStatus();
           gameLoop();
